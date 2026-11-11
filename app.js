@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '52df60e0';
+var BUILD_ID = '44d2ca84';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -407,9 +407,10 @@ SCREENS.unlock = function () {
     drawDots();
     if (n && pin.length === n) tryIt();
   }
-  function face() {
+  function face(auto) {
     if (!bioReady() || T.bioBusy) return;
-    err.textContent = '';
+    if (auto === true && (pin || T.unlockPresses !== startPresses)) return; // he is already typing his PIN
+    if (auto !== true) err.textContent = '';
     var typed = T.unlockPresses = T.unlockPresses || 0;
     bioUnlock().then(function () { if (T.screen === 'unlock') opened(); }).catch(function (e) {
       if (T.screen !== 'unlock' || T.unlockPresses !== typed) return; // he has started typing: keep his digits and messages
@@ -431,7 +432,8 @@ SCREENS.unlock = function () {
   }
   document.removeEventListener('keydown', T.unlockKeys || function () { });
   T.unlockKeys = onKey; document.addEventListener('keydown', onKey);
-  if (bioReady() && !T.bioTried) { T.bioTried = true; setTimeout(face, 350); }
+  var startPresses = T.unlockPresses = T.unlockPresses || 0;
+  if (bioReady() && !T.bioTried) { T.bioTried = true; setTimeout(function () { face(true); }, 350); }
   return el('div', { class: 'unlock' },
     el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
     el('h1', { text: '169-E Rent' }),

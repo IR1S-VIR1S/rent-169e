@@ -133,5 +133,7 @@ function openReceipt(p) {
   document.body.appendChild(bg);
 }
 
+// If this browser once held the owner's phone app, nudge its offline copy to update; the page itself never uses it.
+try { if (navigator.serviceWorker) navigator.serviceWorker.getRegistration().then(function (r) { if (r) { r.update().catch(function () { }); if (r.waiting) r.waiting.postMessage('skip'); } }).catch(function () { }); } catch (e) { }
 window.addEventListener('hashchange', function () { load(1); });
 load(1);
