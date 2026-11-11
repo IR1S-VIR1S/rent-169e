@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App only | 73ea54db | Tenant link carries only the deployment id (about 227 to 148 characters); old long links keep working | phone 79/79 x6 |
 | App only | 44d2ca84 | Tenant page loads its code from tp/, so an old offline copy of the phone app in the same browser cannot break it (fixed "Can't find variable: ordinal_" in Safari); automatic Face ID no longer clears a message or starts once typing has begun | phone 74/74 x12 |
 | Script 2.2 | 52df60e0 | PIN pad with automatic Face ID on opening; tenant page loads with a plain web request, retries, and shows error details; background sync no longer clears a PIN being typed | script 127/127, loader 22/22, phone 74/74 x10 |
 | Script 2.1 | 66816356 | Tenant page (private link, this year only); balance picture; receipt in reminder layout with PAID stamp; arrears switch in pictures and text; Face ID unlock; Lahore and Madrid clocks; maintenance note; sync and typing fixes | script 124/124, loader 22/22, phone 68/68 x6 |

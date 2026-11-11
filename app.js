@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '44d2ca84';
+var BUILD_ID = '73ea54db';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -114,6 +114,17 @@ function unlock(pin) {
       T.S.uploads = T.S.uploads || []; T.S.settings = T.S.settings || { eurRate: 310.7 };
     });
   });
+}
+// The sheet sends the link with the whole web app address packed in. For a normal Google address only the
+// deployment id is needed (the tenant page rebuilds the rest), which makes the link about a third shorter.
+function shortTenantLink(link) {
+  var m = /^([^#]+)#([A-Za-z0-9_-]+)\.([A-Za-z0-9]+)$/.exec(link || '');
+  if (!m) return link || '';
+  try {
+    var api = atob(m[2].replace(/-/g, '+').replace(/_/g, '/'));
+    var g = /^https:\/\/script\.google\.com\/macros\/s\/([A-Za-z0-9_-]+)\/exec$/.exec(api);
+    return g ? m[1] + '#' + g[1] + '.' + m[3] : link;
+  } catch (e) { return link; }
 }
 function lock() {
   T.bioTried = false;
@@ -924,7 +935,7 @@ function tenantAction(action) {
     .catch(function () { toast('Could not reach the sheet. Try again.'); });
 }
 function tenantCard() {
-  var D = T.S.data || {}, link = D.tenantLink;
+  var D = T.S.data || {}, link = shortTenantLink(D.tenantLink);
   return el('div', { class: 'card', id: 'tenantcard' },
     el('div', { class: 'row' }, el('div', null, el('b', { text: (D.tenancy && D.tenancy.tenant || 'Tenant') + "'s page" }),
       el('div', { class: 'sm', text: link ? (D.tenantLastView ? 'Last opened ' + D.tenantLastView.slice(0, 16) : 'Not opened yet') : 'Off' })),

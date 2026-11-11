@@ -19,10 +19,14 @@ function el(tag, attrs) {
   return e;
 }
 
-function parseLink() {
-  var m = /^#([A-Za-z0-9_-]+)\.([A-Za-z0-9]+)$/.exec(location.hash || '');
+// Two link shapes: #<deployment id>.<key> (short) and #<base64 of the web app address>.<key> (older, and for unusual addresses).
+function parseLink(h) {
+  var m = /^#([A-Za-z0-9_-]+)\.([A-Za-z0-9]+)$/.exec(h === undefined ? location.hash || '' : h);
   if (!m) return null;
-  try { return { api: atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), key: m[2] }; } catch (e) { return null; }
+  var api = '';
+  try { api = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')); } catch (e) { }
+  if (!/^https?:\/\//.test(api)) api = 'https://script.google.com/macros/s/' + m[1] + '/exec';
+  return { api: api, key: m[2] };
 }
 
 function getJson(url, opts) {
