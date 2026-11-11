@@ -1,7 +1,7 @@
 /* 169-E Rent: the four shareable phone-screen images, one design. 1080 x 1920. */
 'use strict';
 var LOGO = new Image(); LOGO.src = 'logo-160.png';
-var DRAW = { W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
+var DRAW = { eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
   AR: '"Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif',
   navy: '#0b2a5b', gold: '#b07d1e', ink: '#111827', grey: '#4B5563', line: '#D1D5DB',
   blueBg: '#EFF6FF', blueLine: '#93C5FD', blueInk: '#1E3A8A', rust: '#9A3412', rustBg: '#FFEDD5', green: '#1D6B3A', red: '#B3261E' };
@@ -92,61 +92,97 @@ function drawStatement(v, withArrears) {
   return o.c;
 }
 
-// A payment receipt with the year's statement stapled underneath.
-function drawReceipt(v, pay) {
-  var L = v.L, D = v.D, Y = L.cur, yr = L.year, o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
+// Shared layout for the tenant-facing pictures: header, greeting, a navy card, then rows and the month grid.
+function greet_(g, y, D) {
+  ar_(g, CFG.SALAM, DRAW.W - DRAW.X, y + 40, 46, DRAW.navy, 'right');
+  txt_(g, salut_(D) + ',', DRAW.X, y + 116, 40, 700);
+  return y + 150;
+}
+function cardLines_(g, x, y, w, lines) {
+  lines.forEach(function (l, i) {
+    var ly = y + i * 64;
+    g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(x + 40, ly - 44, w - 80, 2);
+    txt_(g, l[0], x + 40, ly, 30, 400, '#CBD5E1'); txt_(g, fit_(g, l[1], w - 420, 34, 700), x + w - 40, ly, 34, 700, '#FFFFFF', 'right');
+  });
+}
+function arrearsRows_(g, y, L) {
+  if (!(L.arrearsBefore > 0)) return y;
+  y = row_(g, y, 'Arrears up to Dec ' + (L.year - 1), 'separate from ' + L.year, groupNum_(L.arrearsBefore), '#FFFBEB', '#B45309', DRAW.ink);
+  return row_(g, y, 'Total outstanding', 'all years', groupNum_(L.total), DRAW.ink, null, '#FFFFFF');
+}
+function gridBlock_(g, y, L, D) {
+  y += 14; txt_(g, 'Received in ' + L.year, DRAW.X, y + 20, 36, 800); y += 44;
+  return monthGrid_(g, y, L, D, true);
+}
+function eurTxt_(n) { var r = Number(DRAW.eurRate) || 0; return r > 0 ? '≈ €' + groupNum_(n / r) : ''; }
+function stamp_(g, cx, cy, text, color) {
+  g.save(); g.translate(cx, cy); g.rotate(-0.26); g.globalAlpha = 0.82;
+  g.lineWidth = 9; g.strokeStyle = color; g.font = '900 76px ' + DRAW.F;
+  var tw = g.measureText(text).width, bw = tw + 56, bh = 112;
+  box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
+  g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
+  g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 0, 6);
+  g.restore(); g.textBaseline = 'alphabetic';
+}
+
+// Payment receipt: same layout as the reminder, with a PAID stamp.
+function drawReceipt(v, pay, arrears) {
+  var L = v.L, D = v.D, o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
   var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Payment Receipt',
     (pay.pay_id ? 'Receipt ' + pay.pay_id : 'Receipt (being saved)') + ' · ' + fmtDate_(pay.date));
-  box_(g, x, y, w, 520, DRAW.navy, null, 28);
-  txt_(g, 'Received with thanks', x + 40, y + 70, 34, 600, '#E5E7EB');
-  txt_(g, fmtRs_(pay.amount), x + 40, y + 180, 104, 800, '#FFFFFF');
-  if (pay.eur) txt_(g, '€' + pay.eur + ' sent', x + 40, y + 236, 32, 600, '#E0B65A');
-  var lines = [['Date', fmtDate_(pay.date)], ['Received into', pay.into || ''], ['Paid by', byLabel_(D, pay.by) || '']];
-  lines.forEach(function (l, i) {
-    var ly = y + 310 + i * 66;
-    g.fillStyle = 'rgba(255,255,255,.18)'; g.fillRect(x + 40, ly - 46, w - 80, 2);
-    txt_(g, l[0], x + 40, ly, 30, 400, '#CBD5E1'); txt_(g, fit_(g, l[1], w - 420, 32, 700), x + w - 40, ly, 32, 700, '#FFFFFF', 'right');
-  });
-  y += 560;
-  // the stapled statement
-  var sy = y + 30, sh = 134 + 58 * (Y.maint ? 4 : 3) + 230 + 40;
-  g.save(); g.translate(DRAW.W / 2, sy); g.rotate(-0.012); g.translate(-DRAW.W / 2, -sy);
-  g.shadowColor = 'rgba(0,0,0,.18)'; g.shadowBlur = 18; g.shadowOffsetY = 6;
-  box_(g, x + 8, sy, w - 16, sh, '#FFFFFF', null, 18); g.shadowColor = 'transparent';
-  g.strokeStyle = DRAW.line; g.lineWidth = 2; g.stroke();
-  // staples
-  [x + 70, x + w - 150].forEach(function (sx) { box_(g, sx, sy - 14, 80, 12, '#9CA3AF', null, 6); });
-  var iy = sy + 70;
-  txt_(g, yr + ' statement', x + 40, iy, 44, 800); txt_(g, 'as of ' + fmtDate_(v.today), x + w - 40, iy, 28, 400, DRAW.grey, 'right'); iy += 64;
-  [['Rent due', groupNum_(Y.rent), DRAW.ink], ['Received', groupNum_(Y.paid), DRAW.blueInk],
-   [L.yearBalance > 0 ? 'Balance' : 'All clear', groupNum_(Math.max(L.yearBalance, 0)), L.yearBalance > 0 ? DRAW.rust : DRAW.green]]
-    .forEach(function (r) { txt_(g, r[0], x + 40, iy, 32, 600, DRAW.grey); txt_(g, r[1], x + w - 40, iy, 40, 800, r[2], 'right'); iy += 58; });
-  if (Y.maint) { txt_(g, 'Maintenance counted', x + 40, iy, 32, 600, DRAW.grey); txt_(g, groupNum_(Y.maint), x + w - 40, iy, 40, 800, DRAW.green, 'right'); iy += 58; }
-  monthGrid_(g, iy + 4, L, D, true, x + 36, w - 72);
-  g.restore();
+  y = greet_(g, y, D);
+  box_(g, x, y, w, 330 + 2 * 64 + 44, DRAW.navy, null, 28);
+  txt_(g, 'Received with thanks', x + 40, y + 70, 36, 600, '#E5E7EB');
+  txt_(g, fmtRs_(pay.amount), x + 40, y + 182, 106, 800, '#FFFFFF');
+  if (pay.eur) txt_(g, '€' + pay.eur + ' sent', x + 40, y + 238, 34, 600, '#E0B65A');
+  cardLines_(g, x, y + 330, w, [['Date', fmtDate_(pay.date)], ['Received into', pay.into || ''], ['Paid by', byLabel_(D, pay.by) || '']]);
+  stamp_(g, x + w - 160, y + 96, 'PAID', '#22C55E');
+  y += 330 + 2 * 64 + 44 + 30;
+  y = row_(g, y, L.yearBalance > 0 ? 'Balance for ' + L.year : 'All clear for ' + L.year, L.yearBalance > 0 ? 'as of ' + fmtDate_(v.today) : 'thank you',
+    groupNum_(Math.max(L.yearBalance, 0)), L.yearBalance > 0 ? DRAW.rustBg : '#F0FDF4', L.yearBalance > 0 ? '#FDBA74' : '#86EFAC', L.yearBalance > 0 ? DRAW.rust : DRAW.green);
+  if (arrears) y = arrearsRows_(g, y, L);
+  gridBlock_(g, y, L, D);
   footer_(g, rentLine_(D, v.today));
   return o.c;
 }
 
-function drawReminder(v) {
+// Balance update: picture that goes with the balance message.
+function drawBalance(v, pay, arrears) {
+  var L = v.L, D = v.D, Y = L.cur, o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
+  var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Balance Update', 'As of ' + fmtDate_(v.today));
+  y = greet_(g, y, D);
+  var clear = L.yearBalance <= 0;
+  var lines = [['Rent due so far', groupNum_(Y.rent)], ['Received', groupNum_(Y.paid)]];
+  if (Y.maint) lines.push(['Maintenance counted', groupNum_(Y.maint)]);
+  var ch = 330 + (lines.length - 1) * 64 + 44;
+  box_(g, x, y, w, ch, clear ? DRAW.green : DRAW.navy, null, 28);
+  txt_(g, clear ? 'Rent for ' + L.year + ' is clear' : 'Remaining for ' + L.year, x + 40, y + 70, 36, 600, '#E5E7EB');
+  txt_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, 106, 800, '#FFFFFF');
+  if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#E0B65A');
+  cardLines_(g, x, y + 330, w, lines);
+  y += ch + 30;
+  if (pay) y = row_(g, y, 'Thank you for ' + fmtRs_(pay.amount), 'received ' + fmtDate_(pay.date), '', '#F0FDF4', '#86EFAC', DRAW.green);
+  if (arrears) y = arrearsRows_(g, y, L);
+  gridBlock_(g, y, L, D);
+  footer_(g, rentLine_(D, v.today));
+  return o.c;
+}
+
+function drawReminder(v, arrears) {
   var L = v.L, D = v.D, R = reminderInfo_(D, L, v.today), o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
   if (!R) return o.c;
   var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Rent Reminder', fmtDate_(v.today));
-  ar_(g, CFG.SALAM, DRAW.W - x, y + 40, 46, DRAW.navy, 'right');
-  txt_(g, salut_(D) + ',', x, y + 120, 40, 700);
-  y += 160;
-  box_(g, x, y, w, 470, DRAW.navy, null, 28);
-  txt_(g, monthName_(R.month) + ' rent', x + 40, y + 74, 38, 600, '#E5E7EB');
-  txt_(g, fmtRs_(R.rent), x + 40, y + 190, 110, 800, '#FFFFFF');
-  var rate = Number(T.S && T.S.settings.eurRate) || 0;
-  if (rate) txt_(g, '≈ €' + groupNum_(R.rent / rate), x + 40, y + 250, 36, 600, '#E0B65A');
-  g.fillStyle = 'rgba(255,255,255,.2)'; g.fillRect(x + 40, y + 300, w - 80, 2);
-  txt_(g, 'Due by', x + 40, y + 380, 34, 400, '#CBD5E1');
-  txt_(g, (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + ' ' + R.month.slice(0, 4), x + w - 40, y + 386, 50, 800, '#FFFFFF', 'right');
-  y += 510;
+  y = greet_(g, y, D);
+  box_(g, x, y, w, 330 + 44, DRAW.navy, null, 28);
+  txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
+  txt_(g, fmtRs_(R.rent), x + 40, y + 182, 106, 800, '#FFFFFF');
+  txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
+  cardLines_(g, x, y + 330, w, [['Due by', (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + ' ' + R.month.slice(0, 4)]]);
+  stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B');
+  y += 330 + 44 + 30;
   if (R.balanceBefore > 0) y = row_(g, y, 'Balance for ' + L.year, 'before this month', groupNum_(R.balanceBefore), DRAW.rustBg, '#FDBA74', DRAW.rust);
-  y += 20; txt_(g, 'Received in ' + L.year, x, y, 38, 800); y += 24;
-  monthGrid_(g, y, L, D, false);
+  if (arrears) y = arrearsRows_(g, y, L);
+  gridBlock_(g, y, L, D);
   footer_(g, 'Kindly send by the ' + ordinal_(+R.due.slice(8)) + '. Thank you.');
   return o.c;
 }

@@ -279,13 +279,39 @@ function reminderInfo_(D, L, today) {
   return { month: mk, rent: r.rent, due: due, balanceBefore: bal };
 }
 
-function reminderMessage_(D, L, today) {
+function reminderMessage_(D, L, today, opts) {
   var R = reminderInfo_(D, L, today);
   if (!R) return '';
   var b = ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' +
     (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + '.'];
   if (R.balanceBefore > 0) b.push('', 'Balance for ' + L.year + ' before this month: ' + fmtRs_(R.balanceBefore) + '.');
+  if (opts && opts.arrears && L.arrearsBefore > 0) b.push('Earlier arrears (up to Dec ' + (L.year - 1) + '): ' + fmtRs_(L.arrearsBefore) + ', separate.');
   return wrapMsg_(D, b);
+}
+
+// What the tenant may see: this year only, no arrears, no log, flags, visits, notes, phone or deposit.
+function tenantView_(D, L) {
+  var yr = L.year, mk = L.today.slice(0, 7), r = rateFor_(D.rates, mk);
+  var inYear = function (x) { return +String(x.date).slice(0, 4) === yr; };
+  return {
+    D: {
+      tenancy: { tenant: D.tenancy.tenant, salutation: D.tenancy.salutation },
+      property: D.property,
+      rates: r ? [{ from: r.from, rent: r.rent, due_day: r.due_day, late_day: r.late_day }] : [],
+      payments: (D.payments || []).filter(inYear).map(function (p) {
+        return { pay_id: p.pay_id, key: p.pay_id, date: p.date, amount: p.amount, into: p.into, by: p.by, eur: p.eur };
+      }),
+      claims: (D.claims || []).map(function (c) { return { claim_id: c.claim_id, date: c.date, amount: c.amount, desc: c.desc, status: c.status }; })
+    },
+    L: {
+      today: L.today, year: yr, yearBalance: L.yearBalance, arrearsBefore: 0, total: L.yearBalance,
+      cur: { year: yr, rent: L.cur.rent, paid: L.cur.paid, maint: L.cur.maint, months: L.cur.months },
+      avgPaid: L.avgPaid,
+      months: L.months.filter(function (m) { return m.year === yr; }).map(function (m) {
+        return { month: m.month, year: m.year, rent: m.rent, due: m.due, paidInMonth: m.paidInMonth, onTime: m.onTime };
+      })
+    }
+  };
 }
 
 function logSummary_(D, from, to) {

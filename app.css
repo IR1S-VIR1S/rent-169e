@@ -168,3 +168,10 @@ img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; 
 .dot { position: absolute; top: 2px; right: 22px; width: 9px; height: 9px; border-radius: 50%; background: var(--danger); }
 .bar button { min-width: 64px; }
 .msg { white-space: normal; } .msg div[dir] { text-align: start; } .msg .gap { height: 10px; }
+/* 2.1 */
+.arabic { font-size: 22px; text-align: right; color: var(--teal); font-weight: 600; margin: 10px 0; }
+.sheet.tall { max-height: 92vh; overflow-y: auto; }
+.chip.ok, .chip.wait { margin-top: 4px; }
+.clocks { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; color: var(--muted); margin: -4px 0 8px; }
+.clocks svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; margin-right: 4px; }
+.clocks b { color: var(--text); }

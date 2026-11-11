@@ -3,8 +3,9 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.0';
-var RELEASE_NOTE = '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
+var VERSION = '2.1';
+var RELEASE_NOTE = '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
+  '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
   '1.1: pairing uses the /exec address you paste.\n1.0: first version.';
 
@@ -288,13 +289,39 @@ function reminderInfo_(D, L, today) {
   return { month: mk, rent: r.rent, due: due, balanceBefore: bal };
 }
 
-function reminderMessage_(D, L, today) {
+function reminderMessage_(D, L, today, opts) {
   var R = reminderInfo_(D, L, today);
   if (!R) return '';
   var b = ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' +
     (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + '.'];
   if (R.balanceBefore > 0) b.push('', 'Balance for ' + L.year + ' before this month: ' + fmtRs_(R.balanceBefore) + '.');
+  if (opts && opts.arrears && L.arrearsBefore > 0) b.push('Earlier arrears (up to Dec ' + (L.year - 1) + '): ' + fmtRs_(L.arrearsBefore) + ', separate.');
   return wrapMsg_(D, b);
+}
+
+// What the tenant may see: this year only, no arrears, no log, flags, visits, notes, phone or deposit.
+function tenantView_(D, L) {
+  var yr = L.year, mk = L.today.slice(0, 7), r = rateFor_(D.rates, mk);
+  var inYear = function (x) { return +String(x.date).slice(0, 4) === yr; };
+  return {
+    D: {
+      tenancy: { tenant: D.tenancy.tenant, salutation: D.tenancy.salutation },
+      property: D.property,
+      rates: r ? [{ from: r.from, rent: r.rent, due_day: r.due_day, late_day: r.late_day }] : [],
+      payments: (D.payments || []).filter(inYear).map(function (p) {
+        return { pay_id: p.pay_id, key: p.pay_id, date: p.date, amount: p.amount, into: p.into, by: p.by, eur: p.eur };
+      }),
+      claims: (D.claims || []).map(function (c) { return { claim_id: c.claim_id, date: c.date, amount: c.amount, desc: c.desc, status: c.status }; })
+    },
+    L: {
+      today: L.today, year: yr, yearBalance: L.yearBalance, arrearsBefore: 0, total: L.yearBalance,
+      cur: { year: yr, rent: L.cur.rent, paid: L.cur.paid, maint: L.cur.maint, months: L.cur.months },
+      avgPaid: L.avgPaid,
+      months: L.months.filter(function (m) { return m.year === yr; }).map(function (m) {
+        return { month: m.month, year: m.year, rent: m.rent, due: m.due, paidInMonth: m.paidInMonth, onTime: m.onTime };
+      })
+    }
+  };
 }
 
 function logSummary_(D, from, to) {
@@ -323,8 +350,11 @@ var MENU_ITEMS = [
   { label: 'Refresh balances', fn: 'refreshMenu' },
   { label: 'Pair a phone', fn: 'pairPhone' },
   { label: 'Change web app address', fn: 'changeWebAppUrl' },
-  { label: 'Disconnect all phones', fn: 'disconnectAll' }
+  { label: 'Disconnect all phones', fn: 'disconnectAll' },
+  { label: 'Tenant page link', fn: 'tenantLinkMenu' },
+  { label: 'Turn off tenant page', fn: 'tenantOffMenu' }
 ];
+var PAGES_URL = 'https://ir1s-vir1s.github.io/rent-169e/t.html';
 
 var TABS = {
   SUMMARY: ['item', 'value'],
@@ -625,10 +655,15 @@ function api_(b) {
     return { ok: false, code: 409, error: 'The sheet is being updated. Open the Sheet and run "Set up or repair".' };
   }
   if (b.op === 'join') return join_(b);
+  if (b.op === 'tenant') return tenantPage_(b);
   if (!b.token || !props.getProperty('APP_' + sha_(b.token))) {
     return { ok: false, code: 401, error: 'This phone is not paired. Use "Pair a phone" in the sheet.' };
   }
-  if (b.op === 'pull') { var D = loadData_(); D.today = today_(); D.version = VERSION; return { ok: true, data: D }; }
+  if (b.op === 'pull') {
+    var D = loadData_(); D.today = today_(); D.version = VERSION;
+    D.tenantLink = tenantLink_(); D.tenantLastView = props.getProperty('TENANT_LAST_VIEW') || '';
+    return { ok: true, data: D };
+  }
   if (b.op === 'push') return push_(b.items || []);
   if (b.op === 'upload') return upload_(b);
   if (b.op === 'file') return getFile_(b);
@@ -743,6 +778,10 @@ function pushOne_(it, tid, today, stamp, ten) {
       sheet_('VISITS').deleteRow(cur._row);
       log_('visit deleted', cur.visit_id + ' ' + cur.date);
       return { ok: true, deleted: cur.visit_id };
+    case 'tenantlink':
+      if (it.action === 'off') { setTenantKey_(''); return { ok: true, link: '' }; }
+      if (it.action === 'new') { setTenantKey_(rand_(24)); return { ok: true, link: tenantLink_() }; }
+      return { ok: false, error: 'Unknown request.' };
     case 'phone':
       var ph = String(it.phone || '').trim();
       if (ph && !waPhone_(ph)) return { ok: false, error: 'Check the phone number, with country code, for example +34 612 345 678.' };
@@ -799,11 +838,52 @@ function getFile_(b) {
   return { ok: true, mime: f.mime, b64: Utilities.base64Encode(blob.getBytes()) };
 }
 
+// ---------- tenant page ----------
+function setTenantKey_(k) {
+  var p = PropertiesService.getScriptProperties();
+  if (k) p.setProperty('TENANT_KEY', k); else p.deleteProperty('TENANT_KEY');
+  log_(k ? 'tenant page link made' : 'tenant page turned off', '');
+}
+
+function tenantLink_() {
+  var p = PropertiesService.getScriptProperties(), k = p.getProperty('TENANT_KEY'), url = p.getProperty('WEBAPP_URL');
+  if (!k || !url) return '';
+  return PAGES_URL + '#' + Utilities.base64EncodeWebSafe(url).replace(/=+$/, '') + '.' + k;
+}
+
+function tenantPage_(b) {
+  var p = PropertiesService.getScriptProperties(), k = p.getProperty('TENANT_KEY');
+  if (!k || String(b.key || '') !== k) return { ok: false, code: 403, error: 'This link is switched off. Please ask for a new one.' };
+  var D = loadData_(), L = computeLedger_(D, today_());
+  var last = p.getProperty('TENANT_LAST_VIEW') || '', now = nowStamp_();
+  if (!last || now.slice(0, 13) !== last.slice(0, 13)) { p.setProperty('TENANT_LAST_VIEW', now); log_('tenant page opened', ''); }
+  var V = tenantView_(D, L);
+  return { ok: true, data: V.D, ledger: V.L, today: L.today };
+}
+
+function tenantLinkMenu() {
+  var ui = SpreadsheetApp.getUi(), p = PropertiesService.getScriptProperties();
+  if (!webAppUrl_(ui, false)) return;
+  if (!p.getProperty('TENANT_KEY')) setTenantKey_(rand_(24));
+  else if (ui.alert('Tenant page link', 'Keep the current link, or make a new one? A new link stops the old one working.\n\nOK = keep it, Cancel = make a new one.', ui.ButtonSet.OK_CANCEL) !== ui.Button.OK) setTenantKey_(rand_(24));
+  var link = tenantLink_(), last = p.getProperty('TENANT_LAST_VIEW');
+  ui.showModalDialog(HtmlService.createHtmlOutput('<div style="font-family:Arial;font-size:14px"><p>Send this link to the tenant. Anyone with it can see this year\'s rent, payments, receipts and maintenance. Nothing else.</p>' +
+    '<textarea readonly style="width:100%;height:80px" onclick="this.select()">' + link + '</textarea>' +
+    '<p>' + (last ? 'Last opened: ' + last : 'Not opened yet.') + '</p></div>').setWidth(440).setHeight(250), 'Tenant page');
+}
+
+function tenantOffMenu() {
+  var ui = SpreadsheetApp.getUi();
+  if (ui.alert('Turn off the tenant page? The link stops working at once.', ui.ButtonSet.OK_CANCEL) !== ui.Button.OK) return;
+  setTenantKey_('');
+  ui.alert('Tenant page turned off.');
+}
+
 // Everything the loader may call.
 function exports_() {
   return {
     VERSION: VERSION, RELEASE_NOTE: RELEASE_NOTE, MENU_ITEMS: MENU_ITEMS,
     setup: setup, refreshMenu: refreshMenu, pairPhone: pairPhone, changeWebAppUrl: changeWebAppUrl,
-    disconnectAll: disconnectAll, doPost: doPost, doGet: doGet
+    disconnectAll: disconnectAll, tenantLinkMenu: tenantLinkMenu, tenantOffMenu: tenantOffMenu, doPost: doPost, doGet: doGet
   };
 }

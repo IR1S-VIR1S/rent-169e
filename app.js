@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '39aca701';
+var BUILD_ID = '66816356';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -56,6 +56,8 @@ var ICONS = {
   x: 'M18 6L6 18|M6 6l12 12',
   image: 'M3 3h18v18H3z|M8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z|M21 15l-5-5L5 21',
   back: 'M15 18l-6-6 6-6',
+  faceid: 'M7 3H5a2 2 0 0 0-2 2v2|M17 3h2a2 2 0 0 1 2 2v2|M7 21H5a2 2 0 0 1-2-2v-2|M17 21h2a2 2 0 0 0 2-2v-2|M9 9v1|M15 9v1|M12 9v4h-1|M9 16c1.7 1.3 4.3 1.3 6 0',
+  link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7|M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
   update: 'M12 3v12|M7 10l5 5 5-5|M5 21h14'
 };
 var LOG_ICON = { message: 'msg', call: 'callout', callback_req: 'bell', called_back: 'callin', meeting: 'users', flag: 'flag', visit: 'car' };
@@ -118,7 +120,7 @@ function lock() {
   T.screen = stored() ? 'unlock' : 'join'; render();
 }
 function resetPhone() {
-  localStorage.removeItem(STORE);
+  localStorage.removeItem(STORE); localStorage.removeItem(BIO);
   return photoWipe().then(lock);
 }
 
@@ -138,17 +140,18 @@ function queue(item) {
   return saveState();
 }
 function sync(quiet) {
-  if (T.syncing || !T.S || !T.S.token) return Promise.resolve();
+  if (T.syncing) { T.syncAgain = true; return T.syncP || Promise.resolve(); }
+  if (!T.S || !T.S.token) return Promise.resolve();
   if (!navigator.onLine) { if (!quiet) toast('No signal. Saved on this phone.'); softRender(); return Promise.resolve(); }
   T.syncing = true; renderTop();
-  var S = T.S, items = S.outbox.filter(function (x) { return !x.error; });
+  var S = T.S, items = S.outbox.filter(function (x) { return !x.error; }), done = {};
   var p = items.length ? api({ op: 'push', token: S.token, items: items }) : Promise.resolve({ ok: true, results: [] });
-  return p.then(function (r) {
+  var chain = p.then(function (r) {
     if (!r.ok) throw r;
     (r.results || []).forEach(function (res) {
       var i = S.outbox.findIndex(function (x) { return x.req_id === res.req_id; });
       if (i < 0) return;
-      if (res.ok) S.outbox.splice(i, 1); else S.outbox[i].error = res.error;
+      if (res.ok) done[res.req_id] = 1; else S.outbox[i].error = res.error;
     });
     return sendPhotos(S);
   }).then(function () {
@@ -157,15 +160,21 @@ function sync(quiet) {
     if (!r.ok) throw r;
     if (T.S !== S) return;
     S.data = r.data; S.lastSync = Date.now(); S.syncErr = '';
+    S.outbox = S.outbox.filter(function (x) { return !done[x.req_id]; });
     return saveState();
   }).catch(function (e) {
     if (T.S !== S) return;
+    S.outbox = S.outbox.filter(function (x) { return !done[x.req_id]; });
     S.syncErr = (e && e.error) || 'Could not reach the sheet. Will try again.';
     if (e && e.code === 401) S.syncErr = 'This phone was disconnected. Pair it again from the sheet.';
   }).finally(function () {
-    T.syncing = false;
+    T.syncing = false; T.syncP = null;
     if (T.S === S) softRender(); else renderTop();
+    if (T.syncAgain && T.S === S) { T.syncAgain = false; return sync(true); }
+    T.syncAgain = false;
   });
+  T.syncP = chain;
+  return chain;
 }
 function sendPhotos(S) {
   var list = S.uploads.slice();
@@ -236,12 +245,20 @@ var FAB = {
   pays: function () { return T.tab === 'claims' ? ['wrench', 'Add maintenance', openClaim] : ['plus', 'Add payment', openAdd]; },
   log: function () { return ['plus', 'Add entry', function () { openLog('call'); }]; }
 };
-function softRender() { if (['add', 'claim', 'logadd'].indexOf(T.screen) >= 0 || T.sheet) renderTop(); else render(); }
+function softRender() {
+  var ae = document.activeElement, typing = ae && ae.matches && ae.matches('#app input, #app textarea');
+  if (['add', 'claim', 'logadd'].indexOf(T.screen) >= 0 || T.sheet || typing) { renderTop(); return; }
+  if (T.screen === 'settings') {
+    var tc = document.getElementById('tenantcard'); if (tc) tc.replaceWith(tenantCard());
+    renderTop(); return;
+  }
+  render();
+}
 function renderTop() {
   var s = document.getElementById('syncpill');
   if (s && T.S) s.replaceWith(syncPill());
 }
-function go(screen) { T.screen = screen; T.sheet = null; render(); window.scrollTo(0, 0); }
+function go(screen) { T.screen = screen; T.sheet = null; render(); window.scrollTo(0, 0); if (screen === 'settings' && T.S && T.S.data) sync(true); }
 function barEl() {
   return el('nav', { class: 'bar' }, BAR.map(function (b) {
     var n = b[0] === 'settings' && T.S.outbox.some(function (o) { return o.error; }) ? el('span', { class: 'dot' }) : null;
@@ -257,8 +274,21 @@ function syncPill() {
   else t = S.lastSync ? 'Synced ' + new Date(S.lastSync).toTimeString().slice(0, 5) : 'Not synced yet';
   return el('button', { class: 'sync', id: 'syncpill', type: 'button', 'aria-label': 'Sync now', onclick: function () { sync(); } }, svg('sync'), t);
 }
+function clockText() {
+  function t(z) { return new Intl.DateTimeFormat('en-GB', { timeZone: z, hour: '2-digit', minute: '2-digit', weekday: 'short', hourCycle: 'h23' }).format(new Date()); }
+  var mad = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Madrid' })), hr = mad.getHours();
+  var note = hr >= 22 || hr < 8 ? 'night in Madrid' : hr >= 9 && hr < 18 ? 'working hours in Madrid' : 'evening in Madrid';
+  return { lahore: t('Asia/Karachi'), madrid: t('Europe/Madrid'), note: hr >= 8 && hr < 9 ? 'morning in Madrid' : note };
+}
+function clockEl() {
+  var c = clockText();
+  return el('div', { class: 'clocks', id: 'clocks' },
+    el('div', null, svg('clock'), el('span', { text: 'Lahore ' }), el('b', { text: c.lahore })),
+    el('div', null, el('span', { text: 'Madrid ' }), el('b', { id: 'madrid', text: c.madrid }), el('span', { class: 'sm', text: ' · ' + c.note })));
+}
 function topBar(title) {
-  return el('div', { class: 'top' }, el('div', { class: 'brand' }, el('img', { src: 'logo-160.png', alt: '', class: 'logo' }), el('div', { class: 'title', text: title })), syncPill());
+  return el('div', null, el('div', { class: 'top' }, el('div', { class: 'brand' }, el('img', { src: 'logo-160.png', alt: '', class: 'logo' }), el('div', { class: 'title', text: title })), syncPill()),
+    T.screen === 'home' || T.screen === 'log' ? clockEl() : null);
 }
 function backBar(title, to) {
   return el('div', { class: 'top' },
@@ -367,6 +397,10 @@ SCREENS.unlock = function () {
     p = el('input', { id: 'pin', class: 'pin', type: 'password', inputmode: 'numeric', autocomplete: 'off', maxlength: '6',
       onkeydown: function (e) { if (e.key === 'Enter') tryIt(); } }),
     btn('primary wide', 'check', 'Unlock', tryIt, 'unlockbtn'), err,
+    bioReady() ? btn('wide', 'faceid', 'Unlock with Face ID', function () {
+      bioUnlock().then(function () { T.fails = 0; T.idleAt = Date.now(); go(T.S.data ? 'home' : 'loading'); sync(true); })
+        .catch(function (e) { err.textContent = e && e.message === 'cancel' ? '' : 'Face ID did not work. Use your PIN.'; });
+    }, 'bioUnlock') : null,
     btn('wide', null, 'Forgot PIN', function () {
       if (confirm('Reset this phone? You will need a new pairing code from the sheet. Anything not yet sent from this phone will be lost.')) resetPhone();
     }));
@@ -416,7 +450,7 @@ SCREENS.home = function () {
     el('div', { class: 'legend' }, 'Green: paid by the 10th · Blue: paid, but late · Red: nothing paid'),
     el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
     el('div', { class: 'tiles' },
-      tile('sand', 'msg', 'Balance message', 'Text, ready in his chat', function () { openMsg('balance', null); }, 'b-balance'),
+      tile('sand', 'msg', 'Balance update', 'Picture and text', function () { openImg('balance', null); }, 'b-balance'),
       tile('sand', 'bell', 'Rent reminder', 'Picture and text', function () { openImg('reminder'); }, 'b-remind'),
       tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
       tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt')),
@@ -454,6 +488,7 @@ SCREENS.pays = function () {
     var cs = v.D.claims.slice().sort(byDateDesc), counted = cs.filter(function (c) { return c.status !== 'rejected'; });
     return el('div', null, topBar('Payments'), seg,
       el('p', { class: 'muted', text: 'Money he spent on the house, counted against rent as soon as it is entered. Mark one "Not counted" if you disagree.' }),
+      el('div', { class: 'note', id: 'maintnote', text: MAINT_NOTE }),
       el('p', { class: 'muted', text: counted.length + ' counted, ' + fmtRs_(counted.reduce(function (s, c) { return s + c.amount; }, 0)) + ' in all.' }),
       el('div', { class: 'card list', id: 'claimlist' }, cs.length ? cs.map(claimRow) : el('p', { class: 'muted', text: 'None yet.' })));
   }
@@ -518,7 +553,7 @@ function openPay(p) {
       p.note ? el('p', { text: p.note }) : null,
       el('div', { class: 'actions2' },
         btn('primary', 'pays', 'Receipt picture', function () { openImg('receipt', p); }, 'receiptbtn'),
-        btn('', 'msg', 'Balance message', function () { openMsg('balance', p); })),
+        btn('', 'msg', 'Balance picture', function () { openImg('balance', p); })),
       photoStrip('pay', p.key),
       el('label', { class: 'f', for: 'delreason', text: 'Delete this payment (entered by mistake)' }),
       reason = el('input', { id: 'delreason', placeholder: 'Reason, for example typed twice' }),
@@ -570,7 +605,7 @@ SCREENS.add = function () {
     if (e) { T.err = e; err.textContent = e; return; }
     T.S.outbox.push(p); var photos = f.photos; T.form = null; T.err = '';
     addPhotos('pay', p.req_id, photos).then(function () {
-      openMsg('balance', { date: p.date, amount: p.amount });
+      openImg('receipt', { key: p.req_id, date: p.date, amount: p.amount, into: p.into, by: p.by, eur: p.eur });
       sync(true);
       toast(navigator.onLine ? 'Saved.' : 'Saved on this phone. It will send when there is signal.');
     });
@@ -768,12 +803,18 @@ function logPeriod(p, today) {
 }
 SCREENS.image = function () {
   var v = view(), I = T.img, c, title, name, caption = '';
+  DRAW.eurRate = T.S.settings.eurRate;
   if (I.kind === 'statement') { c = drawStatement(v, I.arrears); title = 'Statement'; name = 'Rent_Statement_' + v.L.year; }
+  else if (I.kind === 'balance') {
+    var bp = I.pay ? (v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay) : null;
+    c = drawBalance(v, bp, I.arrears); title = 'Balance update'; name = 'Rent_Balance';
+    caption = balanceMessage_(v.D, v.L, bp, { arrears: I.arrears });
+  }
   else if (I.kind === 'receipt') {
     var p = v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay;
-    c = drawReceipt(v, p); title = 'Receipt'; name = 'Rent_Receipt_' + (p.pay_id || p.date);
+    c = drawReceipt(v, p, I.arrears); title = 'Receipt'; name = 'Rent_Receipt_' + (p.pay_id || p.date);
     caption = balanceMessage_(v.D, v.L, p, { arrears: I.arrears });
-  } else if (I.kind === 'reminder') { c = drawReminder(v); title = 'Rent reminder'; name = 'Rent_Reminder_' + v.today.slice(0, 7); caption = reminderMessage_(v.D, v.L, v.today); }
+  } else if (I.kind === 'reminder') { c = drawReminder(v, I.arrears); title = 'Rent reminder'; name = 'Rent_Reminder_' + v.today.slice(0, 7); caption = reminderMessage_(v.D, v.L, v.today, { arrears: I.arrears }); }
   else { var P = logPeriod(I.period, v.today); c = drawLogSummary(v, P.from, v.today, P.title); title = 'Contact log summary'; name = 'Contact_Log_' + v.today; }
   name += '_' + v.today + '.png';
   var img = el('img', { class: 'stmt', id: 'stmtimg', alt: title });
@@ -784,7 +825,7 @@ SCREENS.image = function () {
   var ph = waPhone_(v.D.tenancy.phone);
   return el('div', null, backBar(title, I.kind === 'log' ? 'log' : 'home'),
     I.kind === 'log' ? chips(['30', 'year', 'all'], I.period, function (x) { I.period = x; render(); }, 'chips-period', function (x) { return logPeriod(x, v.today).title; }) : null,
-    I.kind === 'statement' || I.kind === 'receipt' ? el('label', { class: 'switch', for: 'starr' }, el('span', { text: I.kind === 'statement' ? 'Include earlier arrears and total' : 'Mention earlier arrears in the text' }),
+    I.kind !== 'log' ? el('label', { class: 'switch', for: 'starr' }, el('span', { text: 'Mention earlier arrears in the picture' + (I.kind === 'statement' ? '' : ' and text') }),
       el('input', { id: 'starr', type: 'checkbox', checked: I.arrears, onchange: function (e) { I.arrears = e.target.checked; render(); } })) : null,
     btn('primary wide', 'share', 'Share picture', function () {
       if (!I.blob) return;
@@ -825,6 +866,8 @@ SCREENS.settings = function () {
       el('div', { class: 'hint', text: 'Used only to show approximate euro amounts.' }),
       el('label', { class: 'switch', for: 'arrdef' }, el('span', { text: 'Mention earlier arrears in messages by default' }),
         el('input', { id: 'arrdef', type: 'checkbox', checked: !!S.settings.arrearsInMsg, onchange: function (e) { S.settings.arrearsInMsg = e.target.checked; saveState(); } }))),
+    tenantCard(),
+    bioCard(),
     el('div', { class: 'card' },
       btn('wide', 'update', 'Update app', updateApp, 'updapp'),
       el('p', { class: 'muted', text: 'App ' + BUILD_ID + (S.data && S.data.version ? ' · sheet script ' + S.data.version : '') })),
@@ -833,6 +876,106 @@ SCREENS.settings = function () {
       if (prompt('Type RESET to remove the rent data from this phone.' + (w ? ' ' + w + ' unsent item(s) will be lost.' : '')) === 'RESET') resetPhone();
     }, 'reset'));
 };
+// ---------- tenant page ----------
+function tenantAction(action) {
+  if (!navigator.onLine) { toast('Needs signal.'); return; }
+  api({ op: 'push', token: T.S.token, items: [{ op: 'tenantlink', req_id: uuid(), action: action }] }).then(function (r) {
+    if (!r.ok || !r.results[0].ok) throw r;
+    return sync(true);
+  }).then(function () { toast(action === 'off' ? 'Tenant page turned off.' : 'New tenant link ready.'); })
+    .catch(function () { toast('Could not reach the sheet. Try again.'); });
+}
+function tenantCard() {
+  var D = T.S.data || {}, link = D.tenantLink;
+  return el('div', { class: 'card', id: 'tenantcard' },
+    el('div', { class: 'row' }, el('div', null, el('b', { text: (D.tenancy && D.tenancy.tenant || 'Tenant') + "'s page" }),
+      el('div', { class: 'sm', text: link ? (D.tenantLastView ? 'Last opened ' + D.tenantLastView.slice(0, 16) : 'Not opened yet') : 'Off' })),
+      el('span', { class: 'chip ' + (link ? 'ok' : 'wait'), text: link ? 'On' : 'Off' })),
+    el('p', { class: 'hint', text: 'A private link he can open without any login. It shows only this year: rent, payments, receipts and maintenance.' }),
+    link ? el('div', null,
+      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener',
+        href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(wrapMsg_(D, ['Your rent page for 169-E: ' + link])) }, svg('wa'), el('span', { text: 'Send him the link' })),
+      el('div', { class: 'actions2' },
+        btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
+        btn('', 'link', 'Open it', function () { window.open(link, '_blank'); })),
+      el('div', { class: 'actions2' },
+        btn('', 'sync', 'New link', function () { if (confirm('Make a new link? The old one stops working.')) tenantAction('new'); }, 'newlink'),
+        btn('danger', 'x', 'Turn off', function () { if (confirm('Turn off his page? The link stops working.')) tenantAction('off'); }, 'linkoff')))
+      : btn('primary wide', 'link', 'Make his page link', function () { tenantAction('new'); }, 'makelink'));
+}
+
+// ---------- Face ID: the PIN is kept wrapped by a key only Face ID can release (WebAuthn PRF) ----------
+var BIO = 'r169.bio';
+var MAINT_NOTE = 'Maintenance before November 2026 is not listed here. Maintenance is added only when a written receipt has been sent as a photo on WhatsApp.';
+function bioReady() { return !!localStorage.getItem(BIO) && !!window.PublicKeyCredential; }
+function prfSalt() { return new TextEncoder().encode('169-E Rent unlock key, version 1'); }
+function prfAesKey(out) {
+  return crypto.subtle.importKey('raw', out, 'HKDF', false, ['deriveKey']).then(function (k) {
+    return crypto.subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(16), info: new TextEncoder().encode('pin-wrap') },
+      k, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  });
+}
+function bioGet(id) {
+  return navigator.credentials.get({ publicKey: { challenge: crypto.getRandomValues(new Uint8Array(32)), rpId: location.hostname,
+    allowCredentials: [{ type: 'public-key', id: unb64(id) }], userVerification: 'required', timeout: 60000,
+    extensions: { prf: { eval: { first: prfSalt() } } } } }).then(function (a) {
+    var r = a && a.getClientExtensionResults().prf;
+    if (!r || !r.results || !r.results.first) throw new Error('noprf');
+    return r.results.first;
+  });
+}
+function bioEnable(pin) {
+  if (T.bioBusy) return Promise.reject(new Error('busy'));
+  T.bioBusy = true;
+  var salt = prfSalt();
+  return navigator.credentials.create({ publicKey: { rp: { name: '169-E Rent', id: location.hostname },
+    user: { id: crypto.getRandomValues(new Uint8Array(16)), name: '169-E Rent', displayName: '169-E Rent' },
+    challenge: crypto.getRandomValues(new Uint8Array(32)), timeout: 60000,
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: 'platform', residentKey: 'preferred', userVerification: 'required' },
+    extensions: { prf: { eval: { first: salt } } } } }).then(function (cred) {
+    var ext = cred.getClientExtensionResults().prf || {}, id = b64(cred.rawId);
+    if (ext.enabled === false) throw new Error('noprf');
+    var first = ext.results && ext.results.first;
+    return (first ? Promise.resolve(first) : bioGet(id)).then(prfAesKey).then(function (key) {
+      var iv = crypto.getRandomValues(new Uint8Array(12));
+      return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, new TextEncoder().encode(pin)).then(function (ct) {
+        localStorage.setItem(BIO, JSON.stringify({ id: id, iv: b64(iv), ct: b64(ct) }));
+      });
+    });
+  }).finally(function () { T.bioBusy = false; });
+}
+function bioUnlock() {
+  if (T.bioBusy) return Promise.reject(new Error('busy'));
+  T.bioBusy = true;
+  var b = JSON.parse(localStorage.getItem(BIO));
+  return bioGet(b.id).then(prfAesKey).then(function (key) {
+    return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(b.iv) }, key, unb64(b.ct));
+  }).then(function (pt) { return unlock(new TextDecoder().decode(pt)); })
+    .catch(function (e) { if (e && e.name === 'NotAllowedError') throw new Error('cancel'); throw e; })
+    .finally(function () { T.bioBusy = false; });
+}
+function bioCard() {
+  if (!window.PublicKeyCredential) return null;
+  var on = bioReady(), pin;
+  return el('div', { class: 'card', id: 'biocard' },
+    el('div', { class: 'row' }, el('b', { text: 'Unlock with Face ID' }), el('span', { class: 'chip ' + (on ? 'ok' : 'wait'), text: on ? 'On' : 'Off' })),
+    on ? btn('wide', 'x', 'Turn off Face ID', function () { localStorage.removeItem(BIO); render(); toast('Face ID unlock turned off.'); }, 'biooff')
+      : el('div', null,
+        el('label', { class: 'f', for: 'biopin', text: 'Type your PIN to turn it on' }),
+        pin = el('input', { id: 'biopin', class: 'pin', type: 'password', inputmode: 'numeric', maxlength: '6', autocomplete: 'off' }),
+        btn('primary wide', 'faceid', 'Turn on Face ID', function () {
+          var v = pin.value, st = stored();
+          deriveKey(v, unb64(st.salt)).then(function (k) { return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(st.iv) }, k, unb64(st.ct)); })
+            .then(function () { return bioEnable(v); })
+            .then(function () { render(); toast('Face ID unlock is on. Your PIN still works too.'); })
+            .catch(function (e) {
+              toast(e && e.message === 'noprf' ? 'This phone cannot do Face ID unlock for web apps. Keep using the PIN.' : e && e.name === 'OperationError' ? 'Wrong PIN.' : 'Face ID was not set up.');
+            });
+        }, 'bioon')),
+    el('p', { class: 'hint', text: 'Needs iOS 18 or newer. The PIN always works as a backup.' }));
+}
+
 function updateApp() {
   if (!('serviceWorker' in navigator)) return toast('Updates need the Home Screen app.');
   navigator.serviceWorker.getRegistration().then(function (reg) {
@@ -849,6 +992,7 @@ function touch() { T.idleAt = Date.now(); }
 ['pointerdown', 'keydown'].forEach(function (ev) { document.addEventListener(ev, touch, true); });
 setInterval(function () {
   if (T.key && Date.now() - T.idleAt > IDLE_MS) { lock(); return; }
+  var ck = document.getElementById('clocks'); if (ck) ck.replaceWith(clockEl());
   if (T.S && T.screen === 'log' && T.S.visit && !T.sheet && !document.activeElement.matches('textarea,input')) render();
 }, 15000);
 document.addEventListener('visibilitychange', function () {
