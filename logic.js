@@ -4,9 +4,7 @@ var CFG = {
   APP_NAME: '169-E Rent',
   SCHEMA_VER: 1,
   INTO: ['Sehrish HBL', 'Irfan ABL', 'Cash (with receipt)'],
-  INTO_HISTORY: ['Cash', 'Bank transfer', 'Cheque'],
-  BY: ['Kashif', 'Family', 'Other'],
-  BY_HISTORY: ['Naeem'],
+  BY: ['Tenant', 'Family', 'Other'],
   MAX_AMOUNT: 10000000,
   EARLIEST: '2019-01-01',
   MONTHS: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
@@ -157,7 +155,9 @@ function validatePayment_(p, today) {
   return '';
 }
 
-function salut_(D) { return (D.tenancy && D.tenancy.salutation) || 'Kashif sahib'; }
+function salut_(D) { return (D.tenancy && D.tenancy.salutation) || 'Sir'; }
+
+function byLabel_(D, by) { return by === 'Tenant' && D.tenancy && D.tenancy.tenant ? D.tenancy.tenant : by; }
 
 function balanceMessage_(D, L, pay, opts) {
   opts = opts || {};

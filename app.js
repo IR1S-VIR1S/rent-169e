@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'ba5d85d8';
+var BUILD_ID = '152fc8a4';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -309,7 +309,7 @@ SCREENS.home = function () {
 function payRow(p) {
   return el('button', { class: 'row', onclick: function () { openPay(p); } },
     el('div', null, el('div', { text: fmtDate_(p.date) }),
-      el('div', { class: 'sm', text: [p.into, p.by].filter(Boolean).join(' · ') }),
+      el('div', { class: 'sm', text: [p.into, byLabel_(T.S.data, p.by)].filter(Boolean).join(' · ') }),
       p.pending ? el('div', { class: 'pending', text: p.error ? 'Refused: ' + p.error : 'Waiting to send' }) : null),
     el('div', { class: 'amt', text: fmtRs_(p.amount) }));
 }
@@ -335,7 +335,7 @@ function openPay(p) {
     return el('div', { class: 'sheet-bg', onclick: function (e) { if (e.target === e.currentTarget) close(); } },
       el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Payment' },
         el('h2', { text: fmtRs_(p.amount) + ' on ' + fmtDate_(p.date) }),
-        el('p', { class: 'muted', text: [p.into, p.by, p.eur ? '€' + p.eur + ' sent' : '', p.pay_id].filter(Boolean).join(' · ') }),
+        el('p', { class: 'muted', text: [p.into, byLabel_(T.S.data, p.by), p.eur ? '€' + p.eur + ' sent' : '', p.pay_id].filter(Boolean).join(' · ') }),
         p.note ? el('p', { text: p.note }) : null,
         el('button', { class: 'btn wide', onclick: function () { T.sheet = null; openMsg('balance', p); } }, 'Send balance message for this payment'),
         el('label', { class: 'f', for: 'delreason', text: 'Delete this payment (entered by mistake)' }),
@@ -353,17 +353,18 @@ function openPay(p) {
 
 // ---------- add payment ----------
 function openAdd() {
-  T.form = { date: todayPk(), amount: '', eur: '', into: 'Sehrish HBL', by: 'Kashif', note: '' };
+  T.form = { date: todayPk(), amount: '', eur: '', into: 'Sehrish HBL', by: 'Tenant', note: '' };
   T.err = ''; go('add');
 }
 SCREENS.add = function () {
   var f = T.form, amtHint = el('div', { class: 'hint', id: 'amthint' }), err = el('div', { class: 'err', id: 'adderr', text: T.err });
   function hint() { var a = Number(f.amount); amtHint.textContent = a > 0 ? fmtRs_(a) + '  ' + eur(a) : ''; }
+  var D0 = T.S.data;
   function chips(list, key) {
     return el('div', { class: 'chips', id: 'chips-' + key }, list.map(function (x) {
-      return el('button', { class: f[key] === x ? 'on' : '', type: 'button', onclick: function (e) {
-        f[key] = x; e.currentTarget.parentNode.querySelectorAll('button').forEach(function (b) { b.className = b.textContent === x ? 'on' : ''; });
-      } }, x);
+      return el('button', { class: f[key] === x ? 'on' : '', type: 'button', 'data-v': x, onclick: function (e) {
+        f[key] = x; e.currentTarget.parentNode.querySelectorAll('button').forEach(function (b) { b.className = b.getAttribute('data-v') === x ? 'on' : ''; });
+      } }, key === 'by' ? byLabel_(D0, x) : x);
     }));
   }
   var amount = el('input', { id: 'amount', inputmode: 'numeric', autocomplete: 'off', placeholder: 'e.g. 200000', value: f.amount,
