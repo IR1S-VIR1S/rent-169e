@@ -39,29 +39,75 @@ function getJson(url, opts) {
     });
   }).finally(function () { clearTimeout(t); });
 }
+// GET first; if it has not answered in 6 seconds, also try POST, and take whichever answers first.
 function fetchTenant(L) {
   var sep = L.api.indexOf('?') >= 0 ? '&' : '?';
-  return getJson(L.api + sep + 'op=tenant&key=' + encodeURIComponent(L.key) + '&t=' + Date.now())
-    .catch(function () {
-      return getJson(L.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'tenant', key: L.key }) });
-    });
+  return new Promise(function (resolve, reject) {
+    var left = 2, done = false, errs = [], postT;
+    function win(r) { if (done) return; done = true; clearTimeout(postT); resolve(r); }
+    function lose(e) { errs.push(String(e && e.message || e)); if (--left === 0 && !done) reject(new Error(errs.join(' / '))); }
+    function post() {
+      if (done || post.started) return; post.started = true;
+      getJson(L.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'tenant', key: L.key }) }).then(win, lose);
+    }
+    getJson(L.api + sep + 'op=tenant&key=' + encodeURIComponent(L.key) + '&t=' + Date.now()).then(win, function (e) { lose(e); post(); });
+    postT = setTimeout(post, 6000);
+  });
 }
+// His own phone keeps the last copy of his page, so it opens at once and then refreshes.
+function cacheKey(L) { return 'r169t.' + L.key; }
+function readCache(L) { try { var c = JSON.parse(localStorage.getItem(cacheKey(L)) || 'null'); return c && c.data && c.ledger ? c : null; } catch (e) { return null; } }
+function writeCache(L, r) { try { localStorage.setItem(cacheKey(L), JSON.stringify({ data: r.data, ledger: r.ledger, today: r.today, at: Date.now() })); } catch (e) { } }
+function dropCache(L) { try { localStorage.removeItem(cacheKey(L)); } catch (e) { } }
+
 function load(attempt) {
   attempt = attempt || 1;
   var L = parseLink();
   if (!L || !/^https?:\/\//.test(L.api)) { TP.err = 'This link is not complete. Please ask for the link again.'; render(); return; }
-  TP.err = ''; TP.detail = ''; TP.loading = true; render();
+  if (!TP.data) { var c = readCache(L); if (c) { TP.data = c.data; TP.data.files = []; TP.ledger = c.ledger; TP.today = c.today; TP.cachedAt = c.at; } }
+  TP.err = ''; TP.detail = ''; TP.failed = false; TP.loading = true;
+  if (attempt === 1) TP.startedAt = Date.now();
+  render();
   fetchTenant(L).then(function (r) {
     TP.loading = false;
-    if (!r.ok) { TP.err = r.error || 'This page is not available.'; render(); return; }
-    TP.data = r.data; TP.data.files = []; TP.ledger = r.ledger; TP.today = r.today; render();
+    if (!r.ok) {
+      if (r.code === 403) { dropCache(L); TP.data = null; }
+      if (TP.data) { TP.failed = true; render(); return; }
+      TP.err = r.error || 'This page is not available.'; render(); return;
+    }
+    TP.data = r.data; TP.data.files = []; TP.ledger = r.ledger; TP.today = r.today; TP.cachedAt = 0; TP.freshAt = Date.now();
+    writeCache(L, r); render();
   }).catch(function (e) {
     if (attempt < 3 && navigator.onLine !== false) { setTimeout(function () { load(attempt + 1); }, attempt * 1500); return; }
     TP.loading = false;
+    if (TP.data) { TP.failed = true; render(); return; }
     TP.err = navigator.onLine === false ? 'No internet. Connect and try again.' : 'Could not load the page right now. Please try again.';
     TP.detail = String(e && e.message || e || '');
     render();
   });
+}
+
+// While nothing is on screen yet: a moving bar and a message that changes, so the page never looks frozen.
+function waitMsg() {
+  var s = (Date.now() - (TP.startedAt || Date.now())) / 1000;
+  return s < 4 ? 'Getting your rent page…' : s < 12 ? 'Connecting to the rent sheet…' : 'Nearly there. The sheet can take up to half a minute to wake up.';
+}
+setInterval(function () { var m = document.getElementById('twait'); if (m) m.textContent = waitMsg(); }, 1000);
+function loadingScreen() {
+  return el('div', { id: 'tloading', 'aria-busy': 'true' },
+    el('div', { class: 'top' }, el('div', { class: 'brand' }, el('img', { src: 'logo-160.png', alt: '', class: 'logo' }), el('div', { class: 'title', text: '169-E Rent' }))),
+    el('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Loading' }, el('span')),
+    el('p', { class: 'muted', id: 'twait', 'aria-live': 'polite', text: waitMsg() }),
+    el('div', { class: 'card skel hero' }), el('div', { class: 'card skel' }), el('div', { class: 'skel grid' }), el('div', { class: 'card skel' }));
+}
+function statusBar() {
+  var when = TP.cachedAt ? new Date(TP.cachedAt) : null;
+  var at = when ? fmtDate_(when.getFullYear() + '-' + pad2_(when.getMonth() + 1) + '-' + pad2_(when.getDate())) + ', ' + pad2_(when.getHours()) + ':' + pad2_(when.getMinutes()) : '';
+  if (when && when.toDateString() === new Date().toDateString()) at = 'today, ' + at.split(', ')[1];
+  if (TP.loading && TP.cachedAt) return el('div', { class: 'tstatus', id: 'tstatus', role: 'status' }, el('span', { class: 'spin' }), el('span', { text: 'Updating… showing figures from ' + at }));
+  if (TP.failed) return el('div', { class: 'tstatus warn', id: 'tstatus', role: 'status' },
+    'Could not update' + (at ? '. Showing figures from ' + at : '') + '. ', el('button', { class: 'linkbtn', type: 'button', onclick: function () { load(1); } }, 'Try again'));
+  return null;
 }
 
 function v() { return { D: TP.data, L: TP.ledger, today: TP.today }; }
@@ -69,7 +115,7 @@ function v() { return { D: TP.data, L: TP.ledger, today: TP.today }; }
 function render() {
   var app = document.getElementById('app');
   app.className = 'nobar';
-  if (TP.loading) { app.replaceChildren(el('p', { class: 'muted', text: 'Loading…' })); return; }
+  if (TP.loading && !TP.data) { app.replaceChildren(loadingScreen()); return; }
   if (TP.err || !TP.data) {
     app.replaceChildren(el('div', null, el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
       el('h1', { text: '169-E Rent' }), el('p', { id: 'tperr', text: TP.err || 'Loading…' }),
@@ -90,6 +136,7 @@ function render() {
   app.replaceChildren(el('div', null,
     el('div', { class: 'top' }, el('div', { class: 'brand' }, el('img', { src: 'logo-160.png', alt: '', class: 'logo' }),
       el('div', { class: 'title', text: '169-E Rent' })), el('span', { class: 'sm muted', text: fmtDate_(TP.today) })),
+    statusBar(),
     el('p', { class: 'arabic', dir: 'rtl', text: CFG.SALAM }),
     el('p', null, el('b', { text: salut_(D) + ',' }), ' this page shows your rent for ' + yr + '.'),
     el('div', { class: 'card hero' + (L.yearBalance <= 0 ? ' clear' : ''), id: 'tbal' },

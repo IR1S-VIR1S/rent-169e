@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App only | 151f3d57 | Tenant page opens from his phone's last copy and refreshes in the background; first visit shows a moving loading screen with changing messages; GET and POST raced after 6 s; keeps his copy if the sheet is down; switched-off link wipes it | phone 91/91 x6 |
 | Script 2.3 | 34bcaa7a | Reminder follows the date: DUE before or on the 3rd, OVERDUE with days after it (picture, stamp, title and text); advance reminder for next month once this month is paid; bit.ly short link field for the tenant page | script 135/135, loader 22/22, phone 83/83 x6 |
 | App only | 73ea54db | Tenant link carries only the deployment id (about 227 to 148 characters); old long links keep working | phone 79/79 x6 |
 | App only | 44d2ca84 | Tenant page loads its code from tp/, so an old offline copy of the phone app in the same browser cannot break it (fixed "Can't find variable: ordinal_" in Safari); automatic Face ID no longer clears a message or starts once typing has begun | phone 74/74 x12 |
