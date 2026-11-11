@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '66816356';
+var BUILD_ID = '52df60e0';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -103,7 +103,7 @@ function saveState() {
   if (!T.key || !T.S) return Promise.resolve();
   var iv = crypto.getRandomValues(new Uint8Array(12)), st = stored();
   return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, T.key, new TextEncoder().encode(JSON.stringify(T.S))).then(function (ct) {
-    localStorage.setItem(STORE, JSON.stringify({ v: 1, salt: st.salt, iv: b64(iv), ct: b64(ct) }));
+    localStorage.setItem(STORE, JSON.stringify({ v: 1, salt: st.salt, n: st.n || 0, iv: b64(iv), ct: b64(ct) }));
   });
 }
 function unlock(pin) {
@@ -116,6 +116,7 @@ function unlock(pin) {
   });
 }
 function lock() {
+  T.bioTried = false;
   T.key = null; T.S = null; T.form = null; T.msg = null; T.img = null; T.sheet = null; T.thumbs = {};
   T.screen = stored() ? 'unlock' : 'join'; render();
 }
@@ -247,6 +248,7 @@ var FAB = {
 };
 function softRender() {
   var ae = document.activeElement, typing = ae && ae.matches && ae.matches('#app input, #app textarea');
+  if (['unlock', 'join', 'setpin'].indexOf(T.screen) >= 0) return; // never redraw a PIN pad under his fingers
   if (['add', 'claim', 'logadd'].indexOf(T.screen) >= 0 || T.sheet || typing) { renderTop(); return; }
   if (T.screen === 'settings') {
     var tc = document.getElementById('tenantcard'); if (tc) tc.replaceWith(tenantCard());
@@ -349,7 +351,7 @@ SCREENS.setpin = function () {
     if (a.value !== b.value) { err.textContent = 'The two PINs do not match.'; return; }
     var salt = crypto.getRandomValues(new Uint8Array(16));
     deriveKey(a.value, salt).then(function (key) {
-      localStorage.setItem(STORE, JSON.stringify({ v: 1, salt: b64(salt), iv: '', ct: '' }));
+      localStorage.setItem(STORE, JSON.stringify({ v: 1, salt: b64(salt), n: a.value.length, iv: '', ct: '' }));
       T.key = key;
       T.S = { api: T.pending.api, token: T.pending.token, data: null, outbox: [], uploads: [], lastSync: 0, syncErr: '',
         settings: { eurRate: 310.7, arrearsInMsg: false }, visit: null };
@@ -377,33 +379,67 @@ SCREENS.loading = function () {
 };
 
 SCREENS.unlock = function () {
-  var p, err = el('div', { class: 'err' });
+  var pin = '', st = stored() || {}, n = +st.n || 0, err = el('div', { class: 'err', id: 'pinerr', role: 'alert' });
+  var dots = el('div', { class: 'dots', id: 'dots', 'aria-label': 'PIN' });
+  function drawDots() {
+    var k = Math.max(n || 4, pin.length);
+    dots.replaceChildren.apply(dots, Array.apply(null, Array(k)).map(function (_, i) { return el('span', { class: i < pin.length ? 'on' : '' }); }));
+  }
+  function opened() { T.fails = 0; T.idleAt = Date.now(); go(T.S.data ? 'home' : 'loading'); sync(true); }
   function tryIt() {
-    if (T.waitUntil && Date.now() < T.waitUntil) { err.textContent = 'Wait a few seconds and try again.'; return; }
-    unlock(p.value).then(function () {
-      T.fails = 0; T.idleAt = Date.now();
-      go(T.S.data ? 'home' : 'loading'); sync(true);
+    if (T.waitUntil && Date.now() < T.waitUntil) { err.textContent = 'Wait a few seconds and try again.'; pin = ''; drawDots(); return; }
+    var p = pin;
+    unlock(p).then(function () {
+      if (!n) { var s2 = stored(); s2.n = p.length; localStorage.setItem(STORE, JSON.stringify(s2)); }
+      opened();
     }).catch(function () {
-      T.fails = (T.fails || 0) + 1; p.value = '';
+      T.fails = (T.fails || 0) + 1; pin = ''; drawDots();
       if (T.fails >= 5) T.waitUntil = Date.now() + 30000;
       err.textContent = 'Wrong PIN.';
+      dots.classList.remove('shake'); void dots.offsetWidth; dots.classList.add('shake');
     });
   }
-  setTimeout(function () { if (p) p.focus(); }, 50);
-  return el('div', null,
+  function press(k) {
+    T.unlockPresses = (T.unlockPresses || 0) + 1;
+    err.textContent = '';
+    if (k === 'del') pin = pin.slice(0, -1);
+    else if (pin.length < 6) pin += k;
+    drawDots();
+    if (n && pin.length === n) tryIt();
+  }
+  function face() {
+    if (!bioReady() || T.bioBusy) return;
+    err.textContent = '';
+    var typed = T.unlockPresses = T.unlockPresses || 0;
+    bioUnlock().then(function () { if (T.screen === 'unlock') opened(); }).catch(function (e) {
+      if (T.screen !== 'unlock' || T.unlockPresses !== typed) return; // he has started typing: keep his digits and messages
+      err.textContent = e && e.message === 'cancel' ? 'Tap the Face ID key or type your PIN.' : 'Face ID did not work. Type your PIN.';
+    });
+  }
+  drawDots();
+  var keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', bioReady() ? 'face' : (n ? '' : 'ok'), '0', 'del'];
+  var pad = el('div', { class: 'keypad', id: 'keypad' }, keys.map(function (k) {
+    if (!k) return el('span');
+    if (k === 'face') return el('button', { class: 'key fn', type: 'button', id: 'bioUnlock', 'aria-label': 'Unlock with Face ID', onclick: face }, svg('faceid'));
+    if (k === 'del') return el('button', { class: 'key fn', type: 'button', 'aria-label': 'Delete', 'data-k': 'del', onclick: function () { press('del'); } }, svg('back'));
+    if (k === 'ok') return el('button', { class: 'key fn', type: 'button', id: 'unlockbtn', 'aria-label': 'Unlock', onclick: tryIt }, svg('check'));
+    return el('button', { class: 'key', type: 'button', 'data-k': k, onclick: function () { press(k); } }, k);
+  }));
+  function onKey(e) {
+    if (T.screen !== 'unlock') { document.removeEventListener('keydown', onKey); return; }
+    if (/^\d$/.test(e.key)) press(e.key); else if (e.key === 'Backspace') press('del'); else if (e.key === 'Enter') tryIt();
+  }
+  document.removeEventListener('keydown', T.unlockKeys || function () { });
+  T.unlockKeys = onKey; document.addEventListener('keydown', onKey);
+  if (bioReady() && !T.bioTried) { T.bioTried = true; setTimeout(face, 350); }
+  return el('div', { class: 'unlock' },
     el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
     el('h1', { text: '169-E Rent' }),
-    el('label', { class: 'f', for: 'pin', text: 'Enter your PIN' }),
-    p = el('input', { id: 'pin', class: 'pin', type: 'password', inputmode: 'numeric', autocomplete: 'off', maxlength: '6',
-      onkeydown: function (e) { if (e.key === 'Enter') tryIt(); } }),
-    btn('primary wide', 'check', 'Unlock', tryIt, 'unlockbtn'), err,
-    bioReady() ? btn('wide', 'faceid', 'Unlock with Face ID', function () {
-      bioUnlock().then(function () { T.fails = 0; T.idleAt = Date.now(); go(T.S.data ? 'home' : 'loading'); sync(true); })
-        .catch(function (e) { err.textContent = e && e.message === 'cancel' ? '' : 'Face ID did not work. Use your PIN.'; });
-    }, 'bioUnlock') : null,
-    btn('wide', null, 'Forgot PIN', function () {
+    el('p', { class: 'muted', text: bioReady() ? 'Face ID or your PIN' : 'Enter your PIN' }),
+    dots, err, pad,
+    el('button', { class: 'linkbtn', type: 'button', onclick: function () {
       if (confirm('Reset this phone? You will need a new pairing code from the sheet. Anything not yet sent from this phone will be lost.')) resetPhone();
-    }));
+    } }, 'Forgot PIN'));
 };
 
 // ---------- home ----------

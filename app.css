@@ -175,3 +175,19 @@ img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; 
 .clocks { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; font-size: 14px; color: var(--muted); margin: -4px 0 8px; }
 .clocks svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -3px; margin-right: 4px; }
 .clocks b { color: var(--text); }
+/* 2.2 unlock pad */
+.unlock { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.unlock .biglogo { margin: 8px auto 4px; width: 96px; height: 96px; }
+.unlock h1 { margin: 4px 0 0; }
+.dots { display: flex; gap: 16px; justify-content: center; margin: 18px 0 6px; min-height: 18px; }
+.dots span { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--teal); }
+.dots span.on { background: var(--teal); }
+.dots.shake { animation: shake .35s; }
+@keyframes shake { 25% { transform: translateX(-8px); } 50% { transform: translateX(8px); } 75% { transform: translateX(-4px); } }
+.keypad { display: grid; grid-template-columns: repeat(3, 76px); gap: 16px 28px; justify-content: center; margin: 14px 0 10px; }
+.key { width: 76px; height: 76px; border-radius: 50%; border: 0; background: var(--grey-tint); color: var(--text); font: inherit; font-size: 30px; font-weight: 500; cursor: pointer; }
+.key:active { background: var(--line); }
+.key.fn { background: none; color: var(--teal); }
+.key svg { width: 34px; height: 34px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.linkbtn { appearance: none; background: none; border: 0; color: var(--teal); font: inherit; font-weight: 600; min-height: 44px; cursor: pointer; }
+.unlock .err { min-height: 22px; margin: 4px 0 0; }

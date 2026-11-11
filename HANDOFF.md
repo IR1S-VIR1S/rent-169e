@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| Script 2.2 | 52df60e0 | PIN pad with automatic Face ID on opening; tenant page loads with a plain web request, retries, and shows error details; background sync no longer clears a PIN being typed | script 127/127, loader 22/22, phone 74/74 x10 |
 | Script 2.1 | 66816356 | Tenant page (private link, this year only); balance picture; receipt in reminder layout with PAID stamp; arrears switch in pictures and text; Face ID unlock; Lahore and Madrid clocks; maintenance note; sync and typing fixes | script 124/124, loader 22/22, phone 68/68 x6 |
 | Script 2.0 | 39aca701 | Loader updates; Arabic greeting/closing, "Bhai"; due by the 3rd, late after the 10th; maintenance claims; contact log with red flags; EME visit timer; receipt photos in Drive; tenant WhatsApp number; receipt, reminder, statement and log pictures | script 101/101, loader 22/22, phone 48/48 x3 |
 | Script 1.1 | 8727e14e | Pairing uses the pasted /exec address; logo | script 71/71, phone 37/37 |

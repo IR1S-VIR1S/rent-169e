@@ -25,18 +25,39 @@ function parseLink() {
   try { return { api: atob(m[1].replace(/-/g, '+').replace(/_/g, '/')), key: m[2] }; } catch (e) { return null; }
 }
 
-function load() {
+function getJson(url, opts) {
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 30000);
+  opts = opts || {}; opts.signal = ctl.signal; opts.redirect = 'follow'; opts.credentials = 'omit'; opts.cache = 'no-store';
+  return fetch(url, opts).then(function (r) {
+    return r.text().then(function (txt) {
+      try { return JSON.parse(txt); }
+      catch (e) { throw new Error(/<html/i.test(txt) ? 'The server sent a web page instead of data (HTTP ' + r.status + '). The web app may need "Who has access: Anyone".' : 'Unexpected answer (HTTP ' + r.status + ').'); }
+    });
+  }).finally(function () { clearTimeout(t); });
+}
+function fetchTenant(L) {
+  var sep = L.api.indexOf('?') >= 0 ? '&' : '?';
+  return getJson(L.api + sep + 'op=tenant&key=' + encodeURIComponent(L.key) + '&t=' + Date.now())
+    .catch(function () {
+      return getJson(L.api, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'tenant', key: L.key }) });
+    });
+}
+function load(attempt) {
+  attempt = attempt || 1;
   var L = parseLink();
   if (!L || !/^https?:\/\//.test(L.api)) { TP.err = 'This link is not complete. Please ask for the link again.'; render(); return; }
-  TP.err = ''; TP.loading = true; render();
-  fetch(L.api, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ op: 'tenant', key: L.key }) })
-    .then(function (r) { return r.json(); })
-    .then(function (r) {
-      TP.loading = false;
-      if (!r.ok) { TP.err = r.error || 'This page is not available.'; render(); return; }
-      TP.data = r.data; TP.data.files = []; TP.ledger = r.ledger; TP.today = r.today; render();
-    })
-    .catch(function () { TP.loading = false; TP.err = 'Could not load. Check your internet and try again.'; render(); });
+  TP.err = ''; TP.detail = ''; TP.loading = true; render();
+  fetchTenant(L).then(function (r) {
+    TP.loading = false;
+    if (!r.ok) { TP.err = r.error || 'This page is not available.'; render(); return; }
+    TP.data = r.data; TP.data.files = []; TP.ledger = r.ledger; TP.today = r.today; render();
+  }).catch(function (e) {
+    if (attempt < 3 && navigator.onLine !== false) { setTimeout(function () { load(attempt + 1); }, attempt * 1500); return; }
+    TP.loading = false;
+    TP.err = navigator.onLine === false ? 'No internet. Connect and try again.' : 'Could not load the page right now. Please try again.';
+    TP.detail = String(e && e.message || e || '');
+    render();
+  });
 }
 
 function v() { return { D: TP.data, L: TP.ledger, today: TP.today }; }
@@ -48,7 +69,8 @@ function render() {
   if (TP.err || !TP.data) {
     app.replaceChildren(el('div', null, el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
       el('h1', { text: '169-E Rent' }), el('p', { id: 'tperr', text: TP.err || 'Loading…' }),
-      el('button', { class: 'btn primary wide', type: 'button', onclick: load }, 'Try again')));
+      TP.detail ? el('p', { class: 'hint', id: 'tpdetail', text: 'Details: ' + TP.detail }) : null,
+      el('button', { class: 'btn primary wide', type: 'button', onclick: function () { load(1); } }, 'Try again')));
     return;
   }
   var D = TP.data, L = TP.ledger, Y = L.cur, yr = L.year, r = D.rates[0];
@@ -111,5 +133,5 @@ function openReceipt(p) {
   document.body.appendChild(bg);
 }
 
-window.addEventListener('hashchange', load);
-load();
+window.addEventListener('hashchange', function () { load(1); });
+load(1);

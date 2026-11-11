@@ -3,8 +3,9 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.1';
-var RELEASE_NOTE = '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
+var VERSION = '2.2';
+var RELEASE_NOTE = '2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+  '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
   '1.1: pairing uses the /exec address you paste.\n1.0: first version.';
@@ -640,7 +641,17 @@ function disconnectAll() {
 }
 
 // ---------- web app ----------
-function doGet() { return ContentService.createTextOutput('169-E Rent ' + VERSION + ' is running.'); }
+function doGet(e) {
+  var q = (e && e.parameter) || {};
+  if (q.op === 'tenant') {
+    var out;
+    try { out = String(PropertiesService.getScriptProperties().getProperty('SCHEMA_VER')) !== String(CFG.SCHEMA_VER)
+      ? { ok: false, code: 409, error: 'The page is being updated. Please try again in a minute.' } : tenantPage_({ key: q.key }); }
+    catch (err) { out = { ok: false, code: 500, error: 'Server error: ' + String(err && err.message || err) }; }
+    return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput('169-E Rent ' + VERSION + ' is running.');
+}
 
 function doPost(e) {
   var out;
