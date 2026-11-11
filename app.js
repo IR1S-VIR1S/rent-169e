@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '73ea54db';
+var BUILD_ID = '34bcaa7a';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -115,6 +115,7 @@ function unlock(pin) {
     });
   });
 }
+function refreshTenantCard() { var tc = document.getElementById('tenantcard'); if (tc) tc.replaceWith(tenantCard()); }
 // The sheet sends the link with the whole web app address packed in. For a normal Google address only the
 // deployment id is needed (the tenant page rebuilds the rest), which makes the link about a third shorter.
 function shortTenantLink(link) {
@@ -935,7 +936,25 @@ function tenantAction(action) {
     .catch(function () { toast('Could not reach the sheet. Try again.'); });
 }
 function tenantCard() {
-  var D = T.S.data || {}, link = shortTenantLink(D.tenantLink);
+  var D = T.S.data || {}, full = shortTenantLink(D.tenantLink), bl = T.S.settings.bitly;
+  var shortOk = !!(full && bl && bl.for === full && bl.url), link = shortOk ? bl.url : full;
+  var bitly = !full ? null : shortOk
+    ? el('div', { class: 'row', id: 'bitlyrow' }, el('div', null, el('div', { class: 'sm', text: 'Short link in use' }), el('b', { text: bl.url.replace(/^https?:\/\//, '') })),
+      el('button', { class: 'linkbtn', type: 'button', id: 'bitlyoff', onclick: function () { delete T.S.settings.bitly; saveState(); refreshTenantCard(); toast('Back to the full link.'); } }, 'Remove'))
+    : el('div', { id: 'bitlybox' },
+      el('p', { class: 'hint', text: 'Shorter link: tap Copy full link, open Bitly, shorten it there, then paste the bit.ly link here.' }),
+      el('div', { class: 'actions2' },
+        btn('', 'copy', 'Copy full link', function () { navigator.clipboard.writeText(full).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
+        el('a', { class: 'btn', href: 'https://bitly.com', target: '_blank', rel: 'noopener' }, svg('link'), el('span', { text: 'Open Bitly' }))),
+      el('div', { class: 'actions2' },
+        el('input', { id: 'bitlyin', type: 'url', inputmode: 'url', placeholder: 'https://bit.ly/...', autocomplete: 'off', autocapitalize: 'off' }),
+        btn('primary', 'check', 'Save', function () {
+          var v = (document.getElementById('bitlyin').value || '').trim();
+          if (!/^https?:\/\//.test(v)) v = 'https://' + v;
+          if (!/^https:\/\/[A-Za-z0-9.-]+\.[A-Za-z]{2,}\/[A-Za-z0-9_~-]+\/?$/.test(v) || v.length > 60) { toast('Paste the short link, like https://bit.ly/abc123'); return; }
+          T.S.settings.bitly = { url: v.replace(/\/$/, ''), for: full }; saveState(); refreshTenantCard();
+          toast('Saved. Tap Open it once to check it shows his page.');
+        }, 'bitlysave')));
   return el('div', { class: 'card', id: 'tenantcard' },
     el('div', { class: 'row' }, el('div', null, el('b', { text: (D.tenancy && D.tenancy.tenant || 'Tenant') + "'s page" }),
       el('div', { class: 'sm', text: link ? (D.tenantLastView ? 'Last opened ' + D.tenantLastView.slice(0, 16) : 'Not opened yet') : 'Off' })),
@@ -947,6 +966,7 @@ function tenantCard() {
       el('div', { class: 'actions2' },
         btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
         btn('', 'link', 'Open it', function () { window.open(link, '_blank'); })),
+      bitly,
       el('div', { class: 'actions2' },
         btn('', 'sync', 'New link', function () { if (confirm('Make a new link? The old one stops working.')) tenantAction('new'); }, 'newlink'),
         btn('danger', 'x', 'Turn off', function () { if (confirm('Turn off his page? The link stops working.')) tenantAction('off'); }, 'linkoff')))

@@ -270,20 +270,43 @@ function balanceMessage_(D, L, pay, opts) {
   return wrapMsg_(D, b);
 }
 
+function dayNum_(ymd) { var p = ymdParts_(ymd); return Math.round(Date.UTC(p.y, p.m - 1, p.d) / 86400000); }
+// The reminder picks its month and tone from today's date:
+//  - this month's rent not yet due (on or before the 3rd): "due", with days left;
+//  - due date passed and the year still owes money: "overdue", with days overdue (payments clear the oldest months first);
+//  - this month already covered: an advance reminder for next month.
 function reminderInfo_(D, L, today) {
   var mk = today.slice(0, 7), r = rateFor_(D.rates, mk);
   if (!r) return null;
   var due = dueDateFor_(r, mk), bal = L.yearBalance;
   var thisMonth = L.months.filter(function (x) { return x.month === mk; })[0];
+  if (thisMonth && bal <= 0) {
+    var ny = +mk.slice(0, 4), nm = +mk.slice(5, 7) + 1; if (nm > 12) { nm = 1; ny++; }
+    var nk = ny + '-' + pad2_(nm), nr = rateFor_(D.rates, nk) || r, nd = dueDateFor_(nr, nk);
+    return { month: nk, rent: nr.rent, due: nd, balanceBefore: 0, status: 'due', days: dayNum_(nd) - dayNum_(today), unpaid: nr.rent };
+  }
   if (thisMonth) bal -= thisMonth.rent;
-  return { month: mk, rent: r.rent, due: due, balanceBefore: bal };
+  var late = !!thisMonth && today > due;
+  return { month: mk, rent: r.rent, due: due, balanceBefore: bal, status: late ? 'overdue' : 'due',
+    days: late ? dayNum_(today) - dayNum_(due) : dayNum_(due) - dayNum_(today),
+    unpaid: thisMonth ? Math.min(r.rent, Math.max(L.yearBalance, 0)) : r.rent };
 }
-
+function dueText_(R) { return (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.due.slice(5, 7) - 1]; }
+function daysText_(n) { return n + (n === 1 ? ' day' : ' days'); }
+// One line for the bottom of the picture, matching the date it is sent.
+function reminderLine_(R) {
+  if (R.status === 'overdue') return 'Now ' + daysText_(R.days) + ' overdue. Kindly send it today.';
+  if (R.days === 0) return 'Due today. Kindly send it today. Thank you.';
+  return 'Kindly send by the ' + ordinal_(+R.due.slice(8)) + '. Thank you.';
+}
 function reminderMessage_(D, L, today, opts) {
   var R = reminderInfo_(D, L, today);
   if (!R) return '';
-  var b = ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' +
-    (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + '.'];
+  var b = R.status === 'overdue'
+    ? ['Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + ' and is now ' + daysText_(R.days) + ' overdue.' +
+        (R.unpaid < R.rent ? ' Still unpaid: ' + fmtRs_(R.unpaid) + '.' : ''), 'Kindly send it today.']
+    : ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' + dueText_(R) + '.' +
+        (R.days === 0 ? ' That is today.' : '')];
   if (R.balanceBefore > 0) b.push('', 'Balance for ' + L.year + ' before this month: ' + fmtRs_(R.balanceBefore) + '.');
   if (opts && opts.arrears && L.arrearsBefore > 0) b.push('Earlier arrears (up to Dec ' + (L.year - 1) + '): ' + fmtRs_(L.arrearsBefore) + ', separate.');
   return wrapMsg_(D, b);

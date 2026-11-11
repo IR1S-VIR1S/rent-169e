@@ -115,10 +115,11 @@ function gridBlock_(g, y, L, D) {
   return monthGrid_(g, y, L, D, true);
 }
 function eurTxt_(n) { var r = Number(DRAW.eurRate) || 0; return r > 0 ? '≈ €' + groupNum_(n / r) : ''; }
-function stamp_(g, cx, cy, text, color) {
+function stamp_(g, cx, cy, text, color, size) {
+  size = size || 76;
   g.save(); g.translate(cx, cy); g.rotate(-0.26); g.globalAlpha = 0.82;
-  g.lineWidth = 9; g.strokeStyle = color; g.font = '900 76px ' + DRAW.F;
-  var tw = g.measureText(text).width, bw = tw + 56, bh = 112;
+  g.lineWidth = 9; g.strokeStyle = color; g.font = '900 ' + size + 'px ' + DRAW.F;
+  var tw = g.measureText(text).width, bw = tw + 56, bh = Math.round(size * 1.47);
   box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
   g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
   g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 0, 6);
@@ -171,19 +172,20 @@ function drawBalance(v, pay, arrears) {
 function drawReminder(v, arrears) {
   var L = v.L, D = v.D, R = reminderInfo_(D, L, v.today), o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
   if (!R) return o.c;
-  var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Rent Reminder', fmtDate_(v.today));
+  var y = header_(g, (D.property || '169-E, EME') + ' · Rent', R.status === 'overdue' ? 'Rent Overdue' : 'Rent Reminder', fmtDate_(v.today));
   y = greet_(g, y, D);
   box_(g, x, y, w, 330 + 44, DRAW.navy, null, 28);
   txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
   txt_(g, fmtRs_(R.rent), x + 40, y + 182, 106, 800, '#FFFFFF');
   txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
-  cardLines_(g, x, y + 330, w, [['Due by', (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.month.slice(5) - 1] + ' ' + R.month.slice(0, 4)]]);
-  stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B');
+  var od = R.status === 'overdue';
+  cardLines_(g, x, y + 330, w, [od ? ['Was due by', dueText_(R) + ' · ' + daysText_(R.days) + ' ago'] : ['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]);
+  if (od) stamp_(g, x + w - 165, y + 92, 'OVERDUE', '#FF7A7A', 46); else stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B');
   y += 330 + 44 + 30;
   if (R.balanceBefore > 0) y = row_(g, y, 'Balance for ' + L.year, 'before this month', groupNum_(R.balanceBefore), DRAW.rustBg, '#FDBA74', DRAW.rust);
   if (arrears) y = arrearsRows_(g, y, L);
   gridBlock_(g, y, L, D);
-  footer_(g, 'Kindly send by the ' + ordinal_(+R.due.slice(8)) + '. Thank you.');
+  footer_(g, reminderLine_(R));
   return o.c;
 }
 
