@@ -1,6 +1,6 @@
 :root {
   --bg: #f4f6f6; --card: #ffffff; --text: #16202a; --muted: #4a5560; --line: #d9dee2;
-  --teal: #0e5e5a; --teal-text: #ffffff; --blue: #1e63a3;
+  --teal: #0b2a5b; --teal-text: #ffffff; --gold: #b07d1e; --blue: #1e63a3;
   --due: #ad4c0a; --due-tint: #fdf0e3; --due-tint-text: #7a3407;
   --ok: #1d6b3a; --ok-tint: #e6f4ea; --ok-tint-text: #14532d;
   --paid-tint: #e8f0fb; --paid-tint-text: #173f6b;
@@ -12,7 +12,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #101416; --card: #1b2226; --text: #e8edf0; --muted: #a9b4bc; --line: #2e383e;
-    --teal: #3aa39b; --teal-text: #062624; --blue: #7ab4ec;
+    --teal: #e0b65a; --teal-text: #10203a; --gold: #e0b65a; --blue: #7ab4ec;
     --due: #f0a160; --due-tint: #3a2414; --due-tint-text: #f6c89f;
     --ok: #6fcf97; --ok-tint: #173323; --ok-tint-text: #a9e6c0;
     --paid-tint: #18273a; --paid-tint-text: #b3d3f5;
@@ -107,3 +107,6 @@ img.stmt { width: 100%; border-radius: 14px; border: 1px solid var(--line); marg
 .sheet { background: var(--card); width: 100%; border-radius: 20px 20px 0 0; padding: 18px 16px calc(env(safe-area-inset-bottom) + 18px); max-width: 560px; margin: 0 auto; }
 .sync svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .chip { white-space: nowrap; }
+.brand { display: flex; align-items: center; gap: 10px; }
+img.logo { width: 40px; height: 40px; border-radius: 10px; }
+img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; margin: 16px 0 8px; }

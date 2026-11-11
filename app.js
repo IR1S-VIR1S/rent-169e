@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '152fc8a4';
+var BUILD_ID = '8727e14e';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -167,7 +167,7 @@ function syncPill() {
   else t = S.lastSync ? 'Synced ' + new Date(S.lastSync).toTimeString().slice(0, 5) : 'Not synced yet';
   return el('button', { class: 'sync', id: 'syncpill', 'aria-label': 'Sync now', onclick: function () { sync(); } }, svg(ICONS.sync), t);
 }
-function topBar(title) { return el('div', { class: 'top' }, el('div', { class: 'title', text: title }), syncPill()); }
+function topBar(title) { return el('div', { class: 'top' }, el('div', { class: 'brand' }, el('img', { src: 'logo-160.png', alt: '', class: 'logo' }), el('div', { class: 'title', text: title })), syncPill()); }
 
 var SCREENS = {};
 SCREENS.boot = function () { return el('p', { class: 'muted', text: 'Loading…' }); };
@@ -180,13 +180,17 @@ SCREENS.join = function () {
     var url;
     try { url = atob(m[1].replace(/-/g, '+').replace(/_/g, '/')); } catch (e) { url = ''; }
     if (!/^https?:\/\//.test(url)) { err.textContent = 'The code is damaged. Make a new one.'; return; }
+    if (/\/dev$/.test(url)) { err.textContent = 'This code points to the test address (ending /dev), which does not work on a phone. In the sheet choose 169-E Rent > Change web app address, paste the address ending /exec, then Pair a phone again.'; return; }
     T.joinApi = url; err.textContent = 'Connecting…';
     api({ op: 'join', code: m[2] }).then(function (r) {
       if (!r.ok) { err.textContent = r.error || 'Could not pair.'; return; }
       T.pending = { api: url, token: r.token }; go('setpin');
-    }).catch(function () { err.textContent = 'No connection to the sheet. Check the signal and try again.'; });
+    }).catch(function () {
+      err.textContent = navigator.onLine ? 'The sheet did not answer. Check in Apps Script: Deploy > Manage deployments shows a Web app with Execute as: Me and Who has access: Anyone (not "Anyone with Google account"). Fix it, then make a new code with Pair a phone.' : 'No internet on this phone. Connect and try again.';
+    });
   }
   return el('div', null,
+    el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
     el('h1', { text: '169-E Rent' }),
     el('p', { text: 'Pair this phone with your rent sheet.' }),
     el('div', { class: 'note' }, 'On iPhone, first add this page to your Home Screen (Share, then Add to Home Screen) and open it from there, then pair.'),
@@ -248,6 +252,7 @@ SCREENS.unlock = function () {
   }
   setTimeout(function () { if (p) p.focus(); }, 50);
   return el('div', null,
+    el('img', { src: 'logo-160.png', alt: '169 E Rental Management', class: 'biglogo' }),
     el('h1', { text: '169-E Rent' }),
     el('label', { class: 'f', for: 'pin', text: 'Enter your PIN' }),
     p = el('input', { id: 'pin', class: 'pin', type: 'password', inputmode: 'numeric', autocomplete: 'off', maxlength: '6',
@@ -432,9 +437,10 @@ function drawStatement(v, withArrears) {
     if (fill) { g.fillStyle = fill; g.fill(); } if (stroke) { g.lineWidth = 3; g.strokeStyle = stroke; g.stroke(); }
   }
   g.fillStyle = '#ffffff'; g.fillRect(0, 0, W, H);
+  if (LOGO.complete && LOGO.naturalWidth) { g.save(); g.beginPath(); if (g.roundRect) g.roundRect(W - 56 - 150, 56, 150, 150, 30); else g.rect(W - 56 - 150, 56, 150, 150); g.clip(); g.drawImage(LOGO, W - 56 - 150, 56, 150, 150); g.restore(); }
   var yr = L.year, Y = L.cur, x = 56, w = W - 112, y = 110;
   txt((D.property || '169-E, EME') .toUpperCase().slice(0, 40) + ' · RENT', x, y, 30, 700, '#4B5563'); y += 100;
-  txt(yr + ' Rent Statement', x, y, 84, 800); y += 56;
+  txt(yr + ' Rent Statement', x, y, 70, 800); y += 56;
   txt('As of ' + fmtDate_(v.today) + ' · amounts in Rs', x, y, 32, 400, '#4B5563'); y += 60;
   function row(label, sub, val, fill, stroke, col) {
     box(x, y, w, 130, fill, stroke);
@@ -476,6 +482,7 @@ function drawStatement(v, withArrears) {
   txt('JazakAllah', x, H - 70, 30, 600, '#4B5563');
   return c;
 }
+var LOGO = new Image(); LOGO.src = 'logo-160.png';
 function ordinal(n) { var s = ['th', 'st', 'nd', 'rd'], v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); }
 function openStatement() { T.stmt = { arrears: !!T.S.settings.arrearsInMsg, url: '', blob: null }; go('statement'); }
 SCREENS.statement = function () {
