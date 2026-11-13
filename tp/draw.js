@@ -1,7 +1,9 @@
 /* 169-E Rent: the four shareable phone-screen images, one design. 1080 x 1920. */
 'use strict';
 var LOGO = new Image(); LOGO.src = 'logo-160.png';
-var DRAW = { me: 'Irfan', eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
+// Colour meaning, the same on every picture: red = unpaid or no response (the one thing to act on), blue = money received,
+// green = he responded, navy = plain information, grey = nothing recorded. Red is kept for alarms so it stands out in a WhatsApp thumbnail.
+var DRAW = { me: 'Irfan', alarm: '#C62828', nilBg: '#FDECEA', nilInk: '#B3261E', eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
   AR: '"Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif',
   navy: '#0b2a5b', gold: '#b07d1e', ink: '#111827', grey: '#4B5563', line: '#D1D5DB',
   blueBg: '#EFF6FF', blueLine: '#93C5FD', blueInk: '#1E3A8A', rust: '#9A3412', rustBg: '#FFEDD5', green: '#1D6B3A', red: '#B3261E' };
@@ -57,7 +59,7 @@ function monthGrid_(g, y, L, D, small, x0, w0) {
     var paidIn = D.payments.filter(function (p) { return p.date.slice(0, 7) === k; }).reduce(function (s, p) { return s + (+p.amount); }, 0);
     var cx = x + ((m - 1) % 6) * (cw + 12), cy = y + Math.floor((m - 1) / 6) * (ch + 14);
     var none = !mo && !paidIn;
-    var fill = none ? '#F1F3F5' : paidIn ? DRAW.blueBg : DRAW.rustBg, col = none ? '#6B7280' : paidIn ? DRAW.blueInk : DRAW.rust;
+    var fill = none ? '#F1F3F5' : paidIn ? DRAW.blueBg : DRAW.nilBg, col = none ? '#6B7280' : paidIn ? DRAW.blueInk : DRAW.nilInk;
     box_(g, cx, cy, cw, ch, fill);
     txt_(g, CFG.MONTHS[m - 1].slice(0, 3), cx + cw / 2, cy + (small ? 36 : 40), small ? 25 : 28, 700, col, 'center');
     txt_(g, none ? '' : paidIn ? groupNum_(paidIn) : 'Nil', cx + cw / 2, cy + (small ? 70 : 78), small ? 24 : 27, 800, col, 'center');
@@ -124,7 +126,7 @@ function gridBlock_(g, y, L, D) {
   return monthGrid_(g, y, L, D, true);
 }
 function eurTxt_(n) { var r = Number(DRAW.eurRate) || 0; return r > 0 ? '≈ €' + groupNum_(n / r) : ''; }
-function stamp_(g, cx, cy, text, color, size, line2, line3) {
+function stamp_(g, cx, cy, text, color, size, line2, line3, fill) {
   size = size || 76;
   g.save(); g.translate(cx, cy); g.rotate(line2 ? -0.1 : -0.26); g.globalAlpha = line2 ? 0.95 : 0.82;
   g.lineWidth = 9; g.strokeStyle = color; g.font = '900 ' + size + 'px ' + DRAW.F;
@@ -133,8 +135,15 @@ function stamp_(g, cx, cy, text, color, size, line2, line3) {
   var s3 = Math.round(size * 0.56), tw3 = 0;
   if (line3) { g.font = '900 ' + s3 + 'px ' + DRAW.F; tw3 = g.measureText(line3).width; g.font = '900 ' + size + 'px ' + DRAW.F; }
   var bw = Math.max(tw, tw2, tw3) + 56, bh = (line2 ? size + s2 + 60 : Math.round(size * 1.47)) + (line3 ? s3 + 12 : 0);
-  box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
-  g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
+  if (fill) { // solid stamp: filled, white ring outside so it stands off a dark card, white text
+    g.globalAlpha = 1; box_(g, -bw / 2 - 6, -bh / 2 - 6, bw + 12, bh + 12, '#FFFFFF', null, 24);
+    box_(g, -bw / 2, -bh / 2, bw, bh, fill, null, 20);
+    g.lineWidth = 3; box_(g, -bw / 2 + 12, -bh / 2 + 12, bw - 24, bh - 24, null, null, 12); g.strokeStyle = 'rgba(255,255,255,0.75)'; g.stroke();
+    color = '#FFFFFF';
+  } else {
+    box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
+    g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
+  }
   g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
   if (line2) {
     g.fillText(text, 0, -bh / 2 + 26 + size / 2);
@@ -150,7 +159,7 @@ function lastPaidText_(D, today) {
   var n = dayNum_(today) - dayNum_(d);
   return n === 0 ? 'LAST PAID TODAY' : 'LAST PAID ' + daysText_(n).toUpperCase() + ' AGO';
 }
-function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 196, y + 165, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : ''); }
+function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 196, y + 165, 'OVERDUE', '#FFFFFF', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : '', DRAW.alarm); }
 // The big amount, made smaller only when the stamp needs the room beside it.
 function amount_(g, s, x, y, maxW) {
   var size = 106; g.font = '800 ' + size + 'px ' + DRAW.F;
@@ -264,7 +273,7 @@ function drawBalance(v, pay, arrears) {
   box_(g, x, y, w, ch, clear ? DRAW.green : DRAW.navy, null, 28);
   txt_(g, clear ? 'Rent for ' + L.year + ' is clear' : 'Remaining for ' + L.year, x + 40, y + 70, 36, 600, '#E5E7EB');
   var R = clear ? null : reminderInfo_(D, L, v.today), odb = !!R && R.status === 'overdue';
-  amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 320 : w - 80);
+  amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 370 : w - 80);
   if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#E0B65A');
   cardLines_(g, x, y + 330, w, lines);
   if (odb) overdueStamp_(g, x, w, y, R.days, D, v.today);
@@ -284,7 +293,7 @@ function drawReminder(v, arrears) {
   var od = R.status === 'overdue', bh = od ? 290 : 330 + 44;
   box_(g, x, y, w, bh, DRAW.navy, null, 28);
   txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
-  amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 320 : w - 80);
+  amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 370 : w - 80);
   txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
   if (od) overdueStamp_(g, x, w, y, R.days, D, v.today);
   else { cardLines_(g, x, y + 330, w, [['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]); stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B'); }
