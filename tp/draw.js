@@ -139,22 +139,63 @@ function amount_(g, s, x, y, maxW) {
   while (size > 60 && g.measureText(s).width > maxW) { size -= 4; g.font = '800 ' + size + 'px ' + DRAW.F; }
   txt_(g, s, x, y, size, 800, '#FFFFFF');
 }
-// Contact this year, under the months received.
-function contactBlock_(g, y, D, L) {
-  var C = contactCounts_(D, L.year + '-01-01', L.today), x = DRAW.X, w = DRAW.W - 2 * x;
-  var tiles = [['Calls made', C.calls], ['Not answered', C.unanswered], ['Messages sent', C.messages],
-    ['Asked to call back', C.callbackReq], ['He called', C.calledBack], ['Visits to EME', C.visits]];
-  if (!tiles.some(function (t) { return t[1] > 0; })) return y;
-  y += 10; txt_(g, 'Contact in ' + L.year, x, y + 20, 36, 800); y += 44;
-  var tw = (w - 5 * 12) / 6;
-  tiles.forEach(function (t, i) {
-    var tx = x + i * (tw + 12), bad = i === 1 && t[1] > 0;
-    box_(g, tx, y, tw, 112, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line, 16);
-    txt_(g, String(t[1] || 0), tx + tw / 2, y + 50, 42, 800, bad ? DRAW.red : DRAW.navy, 'center');
-    var words = t[0].split(' '), l1 = words.length > 2 ? words.slice(0, 2).join(' ') : words[0], l2 = words.slice(words.length > 2 ? 2 : 1).join(' ');
-    txt_(g, l1, tx + tw / 2, y + 78, 19, 600, DRAW.grey, 'center'); txt_(g, l2, tx + tw / 2, y + 100, 19, 600, DRAW.grey, 'center');
+// Contact since the last payment (the whole year when nothing was paid yet), under the months received:
+// the Contact Log picture without its Latest list, drawn smaller. Parts that do not fit above the footer are left out.
+function contactBlock_(g, y, v) {
+  var D = v.D, L = v.L, to = v.today, x = DRAW.X, w = DRAW.W - 2 * x, end = DRAW.H - 176;
+  var payDay = (D.payments || []).reduce(function (m, p) { return p.date > m && p.date <= to ? p.date : m; }, '');
+  var payAmt = (D.payments || []).reduce(function (t, p) { return p.date === payDay ? t + (Number(p.amount) || 0) : t; }, 0);
+  var from = payDay || L.year + '-01-01', R = contactStory_(D, from, to), PAYC = '#2563EB';
+  if (!R.daysMe && !R.daysHe) return y;
+  if (y + 44 + 170 > end) return y;
+  y += 10; txt_(g, payDay ? 'Contact since last payment (' + fmtDate_(payDay) + ')' : 'Contact in ' + L.year, x, y + 22, 34, 800); y += 40;
+  // who reached out
+  var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 40;
+  box_(g, x, y, w, 158, '#F8FAFC', DRAW.line, 20);
+  [['You', mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
+    ['He', his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
+    var by = y + 14 + i * 70;
+    txt_(g, r[0] + ': ' + r[1], x + 20, by + 24, 26, 800, DRAW.ink);
+    txt_(g, r[2], x + w - 20, by + 24, 22, 600, DRAW.grey, 'right');
+    box_(g, x + 20, by + 34, bw, 22, '#E5E7EB', null, 11);
+    if (r[1] > 0) box_(g, x + 20, by + 34, Math.max(22, bw * r[1] / top), 22, r[3], null, 11);
   });
-  return y + 126;
+  y += 170;
+  // the numbers
+  if (y + 118 > end) return y;
+  var tiles = [['Calls made', String(R.calls), 'in ' + plural2_(R.tries, 'try').replace('trys', 'tries')],
+    ['Tries answered', R.ans + ' of ' + R.tries, 'talked ' + talk_(R.sec), R.tries > 0 && R.ans < R.tries],
+    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days I reached out', R.daysNone > 0],
+    ['Last heard', R.lastHeard ? fmtDate_(R.lastHeard).replace(/ \d{4}$/, '') : 'Never', R.lastHeard ? (to === R.lastHeard ? 'today' : daysText_(dayNum_(to) - dayNum_(R.lastHeard)) + ' ago') : 'in this period']];
+  var tw = (w - 3 * 12) / 4;
+  tiles.forEach(function (t, i) {
+    var tx = x + i * (tw + 12), bad = !!t[3];
+    box_(g, tx, y, tw, 118, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line, 16);
+    txt_(g, t[1], tx + 16, y + 44, 34, 800, bad ? DRAW.red : DRAW.navy);
+    txt_(g, fit_(g, t[0], tw - 26, 20, 700), tx + 16, y + 74, 20, 700, DRAW.ink);
+    txt_(g, fit_(g, t[2], tw - 26, 18, 500), tx + 16, y + 100, 18, 500, DRAW.grey);
+  });
+  y += 130;
+  // day by day: up to 62 squares a row
+  var n = dayNum_(to) - dayNum_(from) + 1, rows = Math.ceil(n / 62), per = Math.ceil(n / rows), ch = rows === 1 ? 36 : 20, gap = rows === 1 ? 4 : 3, cw = (w - (per - 1) * gap) / per;
+  if (y + rows * (ch + gap) + 34 > end) return y;
+  for (var i = 0; i < n; i++) {
+    var k = addDaysYmd_(from, i), q = R.days[k];
+    box_(g, x + (i % per) * (cw + gap), y + Math.floor(i / per) * (ch + gap), cw, ch, k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, rows === 1 ? 7 : 4);
+  }
+  y += rows * (ch + gap) + 6;
+  var lx = x, items = [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']];
+  items.forEach(function (l) {
+    box_(g, lx, y + 2, 18, 18, l[0], null, 5); txt_(g, l[1], lx + 25, y + 18, 19, 600, DRAW.grey);
+    g.font = '600 19px ' + DRAW.F; lx += 25 + g.measureText(l[1]).width + 20;
+  });
+  y += 30;
+  if (payDay && y + 28 <= end) {
+    box_(g, x, y + 2, 18, 18, PAYC, null, 5);
+    txt_(g, 'Last payment: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x + 25, y + 18, 19, 700, DRAW.ink);
+    y += 30;
+  }
+  return y;
 }
 
 // Payment receipt: same layout as the reminder, with a PAID stamp.
@@ -198,7 +239,7 @@ function drawBalance(v, pay, arrears) {
   if (pay) y = row_(g, y, 'Thank you for ' + fmtRs_(pay.amount), 'received ' + fmtDate_(pay.date), '', '#F0FDF4', '#86EFAC', DRAW.green);
   if (arrears) y = arrearsRows_(g, y, L);
   y = gridBlock_(g, y, L, D);
-  contactBlock_(g, y, D, L);
+  contactBlock_(g, y, v);
   footer_(g, rentLine_(D, v.today));
   return o.c;
 }

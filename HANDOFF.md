@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App 313707ff | Balance picture: the contact block is now the Contact Log panel without Latest, drawn smaller (You against He bars, four tiles, day-by-day squares, legend with the last payment marked), for the period since the last payment (the whole year when nothing is paid yet); parts that would not fit above the footer are left out | phone 54/54 x3 |
 | App 51b053d1 | Contact Log picture: new period Since last payment (from the latest payment date; chip shown only when a payment exists); the last payment day is a blue square with its own legend line (amount, date, days ago) and under it the amount still pending for the year (or clear) | phone 53/53 x3 |
 | App 0522c934 | Contact Log picture: day-by-day squares for every period (over 62 days: one small row per month; All entries starts at the first entry, 12 months at most); new periods Last 60 days and Last 90 days | phone 51/51 x3 |
 | App a8d25367 | Contact Log bars: his calls are single calls too (were his answered tries) | phone 48/48 x3 |
