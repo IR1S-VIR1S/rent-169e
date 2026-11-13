@@ -257,7 +257,7 @@ function contactStory_(D, from, to) {
   (D.visits || []).forEach(function (v) { if (v.date >= from && v.date <= to) d(v.date).other++; });
   Object.keys(day).sort().forEach(function (k) {
     var x = day[k], calls = Math.max(x.mCalls, x.c.calls), tries = Math.max(x.mCalls, x.c.tries), ans = Math.max(x.mAns, x.c.ans);
-    var msg = Math.max(x.mMsg, x.cMsg), he = Math.max(x.mHe, x.h.ans);
+    var msg = Math.max(x.mMsg, x.cMsg), he = Math.max(x.mHe, x.h.calls); // single calls, not tries
     T.calls += calls; T.tries += tries; T.ans += Math.min(ans, tries); T.sec += x.c.sec; T.mine += msg; T.his += x.his; T.heCalls += he;
     x.me = calls > 0 || msg > 0 || x.other > 0; x.he = x.his > 0 || he > 0 || ans > 0;
     if (x.me) T.daysMe++;
