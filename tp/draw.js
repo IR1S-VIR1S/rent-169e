@@ -3,7 +3,11 @@
 var LOGO = new Image(); LOGO.src = 'logo-160.png';
 // Colour meaning, the same on every picture: red = unpaid or no response (the one thing to act on), blue = money received,
 // green = he responded, navy = plain information, grey = nothing recorded. Red is kept for alarms so it stands out in a WhatsApp thumbnail.
-var DRAW = { me: 'Irfan', alarm: '#C62828', nilBg: '#FDECEA', nilInk: '#B3261E', eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
+// Palette (research: red works for ONE point and loses effect when used for several (Experian collections study);
+// a red "Pay now" stamp raised payment (Behavioural Insights Team, Louisville); colour should step up with urgency (NSW fines notices)).
+// So: red only for the OVERDUE stamp; the amount owed in warm gold on navy; amber for "no response"; blue for money received;
+// green when he responded; neutral grey for months with nothing paid.
+var DRAW = { me: 'Irfan', alarm: '#C62828', owed: '#FFC857', warn: '#C2620A', warnBg: '#FFF4E5', warnLine: '#F8C98B', nilBg: '#F1F3F5', nilInk: '#4B5563', eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
   AR: '"Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif',
   navy: '#0b2a5b', gold: '#b07d1e', ink: '#111827', grey: '#4B5563', line: '#D1D5DB',
   blueBg: '#EFF6FF', blueLine: '#93C5FD', blueInk: '#1E3A8A', rust: '#9A3412', rustBg: '#FFEDD5', green: '#1D6B3A', red: '#B3261E' };
@@ -161,10 +165,10 @@ function lastPaidText_(D, today) {
 }
 function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 196, y + 165, 'OVERDUE', '#FFFFFF', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : '', DRAW.alarm); }
 // The big amount, made smaller only when the stamp needs the room beside it.
-function amount_(g, s, x, y, maxW) {
+function amount_(g, s, x, y, maxW, color) {
   var size = 106; g.font = '800 ' + size + 'px ' + DRAW.F;
   while (size > 60 && g.measureText(s).width > maxW) { size -= 4; g.font = '800 ' + size + 'px ' + DRAW.F; }
-  txt_(g, s, x, y, size, 800, '#FFFFFF');
+  txt_(g, s, x, y, size, 800, color || '#FFFFFF');
 }
 // Contact since the last payment (the whole year when nothing was paid yet), under the months received:
 // the Contact Log picture without its Latest list, drawn smaller. Parts that do not fit above the footer are left out.
@@ -200,8 +204,8 @@ function contactBlock_(g, y, v) {
   var tw = (w - 3 * 12) / 4;
   tiles.forEach(function (t, i) {
     var tx = x + i * (tw + 12), bad = !!t[3];
-    box_(g, tx, y, tw, 118, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line, 16);
-    txt_(g, t[1], tx + 16, y + 44, 34, 800, bad ? DRAW.red : DRAW.navy);
+    box_(g, tx, y, tw, 118, bad ? DRAW.warnBg : '#F8FAFC', bad ? DRAW.warnLine : DRAW.line, 16);
+    txt_(g, t[1], tx + 16, y + 44, 34, 800, bad ? DRAW.warn : DRAW.navy);
     txt_(g, fit_(g, t[0], tw - 26, 20, 700), tx + 16, y + 74, 20, 700, DRAW.ink);
     txt_(g, fit_(g, t[2], tw - 26, 18, 500), tx + 16, y + 100, 18, 500, DRAW.grey);
   });
@@ -220,7 +224,7 @@ function contactBlock_(g, y, v) {
   var fs = Math.max(13, Math.min(34, Math.floor(Math.min(cw, ch) * 0.42)));
   for (var i = 0; i < n; i++) {
     var k = addDaysYmd_(from, i), q = R.days[k], bx = x + (i % per) * (cw + gap), by = y + Math.floor(i / per) * (ch + gap);
-    var col = k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, grey = col === '#EEF0F3';
+    var col = k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.warn, grey = col === '#EEF0F3';
     box_(g, bx, by, cw, ch, col, null, Math.min(12, cw / 4));
     var dd = +k.slice(8, 10), mon = dd === 1 || i === 0 ? CFG.MONTHS[+k.slice(5, 7) - 1].slice(0, 3) : '';
     if (cw >= 22) {
@@ -249,7 +253,7 @@ function drawReceipt(v, pay, arrears) {
   box_(g, x, y, w, 330 + 2 * 64 + 44, DRAW.navy, null, 28);
   txt_(g, 'Received with thanks', x + 40, y + 70, 36, 600, '#E5E7EB');
   txt_(g, fmtRs_(pay.amount), x + 40, y + 182, 106, 800, '#FFFFFF');
-  if (pay.eur) txt_(g, '€' + pay.eur + ' sent', x + 40, y + 238, 34, 600, '#E0B65A');
+  if (pay.eur) txt_(g, '€' + pay.eur + ' sent', x + 40, y + 238, 34, 600, '#C7D2E3');
   cardLines_(g, x, y + 330, w, [['Date', fmtDate_(pay.date)], ['Received into', pay.into || ''], ['Paid by', byLabel_(D, pay.by) || '']]);
   stamp_(g, x + w - 160, y + 96, 'PAID', '#22C55E');
   y += 330 + 2 * 64 + 44 + 30;
@@ -273,8 +277,8 @@ function drawBalance(v, pay, arrears) {
   box_(g, x, y, w, ch, clear ? DRAW.green : DRAW.navy, null, 28);
   txt_(g, clear ? 'Rent for ' + L.year + ' is clear' : 'Remaining for ' + L.year, x + 40, y + 70, 36, 600, '#E5E7EB');
   var R = clear ? null : reminderInfo_(D, L, v.today), odb = !!R && R.status === 'overdue';
-  amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 370 : w - 80);
-  if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#E0B65A');
+  amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 370 : w - 80, L.yearBalance > 0 ? DRAW.owed : '#FFFFFF');
+  if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#C7D2E3');
   cardLines_(g, x, y + 330, w, lines);
   if (odb) overdueStamp_(g, x, w, y, R.days, D, v.today);
   y += ch + 30;
@@ -293,8 +297,8 @@ function drawReminder(v, arrears) {
   var od = R.status === 'overdue', bh = od ? 290 : 330 + 44;
   box_(g, x, y, w, bh, DRAW.navy, null, 28);
   txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
-  amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 370 : w - 80);
-  txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
+  amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 370 : w - 80, od ? DRAW.owed : '#FFFFFF');
+  txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#C7D2E3');
   if (od) overdueStamp_(g, x, w, y, R.days, D, v.today);
   else { cardLines_(g, x, y + 330, w, [['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]); stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B'); }
   y += bh + 30;
@@ -385,9 +389,9 @@ function drawLogSummary(v, from, to, title) {
   var tw = (w - 3 * 14) / 4;
   tiles.forEach(function (t, i) {
     var tx = x + i * (tw + 14), bad = !!t[3];
-    box_(g, tx, y, tw, 168, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line);
+    box_(g, tx, y, tw, 168, bad ? DRAW.warnBg : '#F8FAFC', bad ? DRAW.warnLine : DRAW.line);
     g.font = '800 46px ' + DRAW.F; var big = g.measureText(t[1]).width > tw - 36 ? 34 : 46;
-    txt_(g, t[1], tx + 20, y + 62, big, 800, bad ? DRAW.red : DRAW.navy);
+    txt_(g, t[1], tx + 20, y + 62, big, 800, bad ? DRAW.warn : DRAW.navy);
     txt_(g, fit_(g, t[0], tw - 30, 23, 700), tx + 20, y + 104, 23, 700, DRAW.ink);
     txt_(g, fit_(g, t[2], tw - 30, 21, 500), tx + 20, y + 136, 21, 500, DRAW.grey);
   });
@@ -399,7 +403,7 @@ function drawLogSummary(v, from, to, title) {
   var n = dayNum_(to) - dayNum_(from) + 1, legendAt;
   var payDay = (D.payments || []).reduce(function (m, p) { return p.date > m ? p.date : m; }, ''), PAYC = '#2563EB';
   var payAmt = (D.payments || []).reduce(function (t, p) { return p.date === payDay ? t + (Number(p.amount) || 0) : t; }, 0);
-  function dayCol(k) { var q = R.days[k]; if (k === payDay) return PAYC; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
+  function dayCol(k) { var q = R.days[k]; if (k === payDay) return PAYC; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.warn; }
   if (n <= 62) {
     txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
     var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per, tags = [];
@@ -480,7 +484,7 @@ function dateTags_(g, top, tags) {
 }
 // Legend for the day squares; the blue Rent paid key is added when the payment day is shown. Wraps to a second row if needed.
 function dayLegend_(g, x, y, size, withPay, D) {
-  var items = [[DRAW.red, DRAW.me + ' contacted, no response'], [DRAW.green, himName_(D) + ' replied, answered or called'], ['#EEF0F3', 'No contact']];
+  var items = [[DRAW.warn, DRAW.me + ' contacted, no response'], [DRAW.green, himName_(D) + ' replied, answered or called'], ['#EEF0F3', 'No contact']];
   if (withPay) items.push(['#2563EB', 'Rent paid']);
   var sq = size + 1, lx = x, step = size + 13;
   g.font = '600 ' + size + 'px ' + DRAW.F;
