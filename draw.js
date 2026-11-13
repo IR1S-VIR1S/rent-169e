@@ -314,17 +314,38 @@ function drawLogSummary(v, from, to, title) {
   if (S.visits) small.push(['Waiting at EME', fmtMins_(S.totalWait)]);
   if (small.length) { txt_(g, small.map(function (t) { return t[0] + ': ' + t[1]; }).join('   ·   '), x, y + 26, 27, 700, S.flags ? DRAW.red : DRAW.ink); y += 52; }
   // 3. day by day (up to 62 days)
-  var n = dayNum_(to) - dayNum_(from) + 1;
+  var n = dayNum_(to) - dayNum_(from) + 1, legendAt;
+  function dayCol(k) { var q = R.days[k]; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
   if (n <= 62) {
     txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
     var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per;
     for (var i = 0; i < n; i++) {
-      var k = addDaysYmd_(from, i), q = R.days[k], cx = x + (i % per) * (cw + gap), cy = y + Math.floor(i / per) * 62;
-      box_(g, cx, cy, cw, 54, !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, 8);
+      var k = addDaysYmd_(from, i), cx = x + (i % per) * (cw + gap), cy = y + Math.floor(i / per) * 62;
+      box_(g, cx, cy, cw, 54, dayCol(k), null, 8);
     }
     y += Math.ceil(n / per) * 62 + 4;
     txt_(g, fmtDate_(from).replace(/ \d{4}$/, ''), x, y + 20, 21, 600, DRAW.grey); txt_(g, fmtDate_(to).replace(/ \d{4}$/, ''), x + w, y + 20, 21, 600, DRAW.grey, 'right');
-    y += 34; var lx = x;
+    y += 34;
+  } else {
+    // longer periods: one small row per month, the whole period (All entries: from the first entry, 12 months at most)
+    var keys = Object.keys(R.days).sort(), first = n > 366 && keys.length && keys[0] > from ? keys[0] : from, months = [], ym = to.slice(0, 7);
+    while (ym >= first.slice(0, 7) && months.length < 12) { months.unshift(ym); var yy = +ym.slice(0, 4), mm = +ym.slice(5, 7) - 1; if (mm < 1) { mm = 12; yy--; } ym = yy + '-' + pad2_(mm); }
+    txt_(g, 'Day by day' + (months[0] > first.slice(0, 7) ? ' (last 12 months)' : ''), x, y + 30, 34, 800); y += 46;
+    var lab = 132, g2 = 3, mw = (w - lab - 30 * g2) / 31;
+    months.forEach(function (m) {
+      var yy = +m.slice(0, 4), mm = +m.slice(5, 7), dim = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+      txt_(g, CFG.MONTHS[mm - 1].slice(0, 3) + ' ' + yy, x, y + 20, 21, 700, DRAW.grey);
+      for (var dd = 1; dd <= dim; dd++) {
+        var k = m + '-' + pad2_(dd);
+        if (k < from || k > to) continue;
+        box_(g, x + lab + (dd - 1) * (mw + g2), y, mw, 24, dayCol(k), null, 5);
+      }
+      y += 30;
+    });
+    y += 2;
+  }
+  {
+    var lx = x;
     [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']].forEach(function (l) {
       box_(g, lx, y + 2, 22, 22, l[0], null, 6); txt_(g, l[1], lx + 30, y + 20, 21, 600, DRAW.grey);
       g.font = '600 21px ' + DRAW.F; lx += 30 + g.measureText(l[1]).width + 26;

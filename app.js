@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'a8d25367';
+var BUILD_ID = '0522c934';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -884,6 +884,7 @@ function openImg(kind, pay) {
 function logPeriod(p, today) {
   if (p === 'year') return { from: today.slice(0, 4) + '-01-01', title: 'This year' };
   if (p === 'all') return { from: CFG.EARLIEST, title: 'All entries' };
+  if (p === '60' || p === '90') return { from: addDaysYmd_(today, -(+p)), title: 'Last ' + p + ' days' };
   return { from: addDaysYmd_(today, -30), title: 'Last 30 days' };
 }
 SCREENS.image = function () {
@@ -909,7 +910,7 @@ SCREENS.image = function () {
   }, 'image/png');
   var ph = waPhone_(v.D.tenancy.phone);
   return el('div', null, backBar(title, I.kind === 'log' ? 'log' : 'home'),
-    I.kind === 'log' ? chips(['30', 'year', 'all'], I.period, function (x) { I.period = x; render(); }, 'chips-period', function (x) { return logPeriod(x, v.today).title; }) : null,
+    I.kind === 'log' ? chips(['30', '60', '90', 'year', 'all'], I.period, function (x) { I.period = x; render(); }, 'chips-period', function (x) { return logPeriod(x, v.today).title; }) : null,
     I.kind !== 'log' ? el('label', { class: 'switch', for: 'starr' }, el('span', { text: 'Mention earlier arrears in the picture' + (I.kind === 'statement' ? '' : ' and text') }),
       el('input', { id: 'starr', type: 'checkbox', checked: I.arrears, onchange: function (e) { I.arrears = e.target.checked; render(); } })) : null,
     btn('primary wide', 'share', 'Share picture', function () {

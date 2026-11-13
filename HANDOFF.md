@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App 0522c934 | Contact Log picture: day-by-day squares for every period (over 62 days: one small row per month; All entries starts at the first entry, 12 months at most); new periods Last 60 days and Last 90 days | phone 51/51 x3 |
 | App a8d25367 | Contact Log bars: his calls are single calls too (were his answered tries) | phone 48/48 x3 |
 | App db2aaf8e (script 2.6 unchanged) | App updates without closing it: checks for a new version on open, on return to the app and every 20 s while visible (at most once a minute); the new version downloads in the background and at the next quiet moment (no form, pop-up, message or picture screen, pending call, typing or sync) the page reloads into it and stays unlocked on the same tab. The non-extractable key is handed over through IndexedDB (r169.hand), valid 20 s, deleted when read; auto-lock clock carried over. Not tested: the service worker steps themselves (tests run without https), only the handover | phone 48/48 x3 |
 | App 862946a1 (script 2.6 unchanged) | Contact Log picture redrawn (draw.js contactStory_): You against He bars on one scale (messages and single calls), tiles for calls made in N tries, tries answered with time talked, days with no response out of days he was contacted, last heard; day-by-day strip (red = contacted, no response; green = he replied, answered or called) for periods up to 62 days; latest entries wrap to two lines | phone 43/43 x3 |
