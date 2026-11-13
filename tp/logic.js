@@ -363,3 +363,5 @@ function contactCounts_(D, from, to) {
   return { calls: (c.call || 0) + (c.no_answer || 0), unanswered: (c.no_answer || 0) + noReply, messages: c.message || 0,
     callbackReq: c.callback_req || 0, calledBack: c.called_back || 0, visits: S.visits, flags: S.flags };
 }
+
+var NEED_SCRIPT = '2.5';

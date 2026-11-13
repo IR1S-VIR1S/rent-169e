@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '4f4462f8';
+var BUILD_ID = 'effa11be';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -174,7 +174,7 @@ function sync(quiet) {
     if (T.S !== S) return;
     S.data = r.data; S.lastSync = Date.now(); S.syncErr = '';
     S.outbox = S.outbox.filter(function (x) { return !done[x.req_id]; });
-    return saveState();
+    return saveState().then(function () { return autoScript(S); });
   }).catch(function (e) {
     if (T.S !== S) return;
     S.outbox = S.outbox.filter(function (x) { return !done[x.req_id]; });
@@ -188,6 +188,21 @@ function sync(quiet) {
   });
   T.syncP = chain;
   return chain;
+}
+// ---------- the workbook script updates itself when this app is newer than it ----------
+function verNum(v) { var p = String(v || '').split('.'); return (+p[0] || 0) * 1e6 + (+p[1] || 0) * 1e3 + (+p[2] || 0); }
+function autoScript(S) {
+  if (typeof NEED_SCRIPT === 'undefined' || !S.data) return null;
+  if (verNum(S.data.version) >= verNum(NEED_SCRIPT)) { if (S.updNote) { S.updNote = ''; return saveState(); } return null; }
+  if (S.updTry && S.updTry.need === NEED_SCRIPT && Date.now() - S.updTry.at < 10 * 60 * 1000) return null;
+  S.updTry = { need: NEED_SCRIPT, at: Date.now() };
+  return api({ op: 'selfupdate', token: S.token }).then(function (r) {
+    if (r.ok && r.updated) { S.updNote = ''; T.syncAgain = true; toast('Workbook updated to version ' + r.version + '.'); }
+    else if (r.error === 'Unknown request.') S.updNote = 'One last update by hand: in the Sheet use 169-E Rent > Install update. After that the workbook updates itself.';
+    else if (!r.ok) S.updNote = r.error || 'The workbook could not update itself. It will try again.';
+    else S.updNote = 'The workbook update (version ' + NEED_SCRIPT + ') is on its way. It installs by itself within a few minutes.';
+    return saveState();
+  }).catch(function () { });
 }
 function sendPhotos(S) {
   var list = S.uploads.slice();
@@ -481,6 +496,7 @@ SCREENS.home = function () {
   return el('div', null,
     topBar('169-E Rent'),
     T.S.syncErr ? el('div', { class: 'note', text: T.S.syncErr }) : null,
+    T.S.updNote ? el('div', { class: 'note', id: 'updnote', text: T.S.updNote }) : null,
     el('div', { class: 'card hero' + (L.yearBalance <= 0 ? ' clear' : ''), id: 'hero' },
       el('div', { class: 'lbl', text: yr + ' balance' }),
       el('div', { class: 'big', id: 'yearbal', text: fmtRs_(Math.max(L.yearBalance, 0)) }),

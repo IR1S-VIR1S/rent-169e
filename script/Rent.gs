@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.4';
-var RELEASE_NOTE = '2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.5';
+var RELEASE_NOTE = '2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -591,7 +591,7 @@ function refresh_() {
 }
 
 // ---------- menu actions ----------
-function setup() {
+function setupCore_() {
   Object.keys(TABS).forEach(function (t) { sheet_(t); });
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var s1 = ss.getSheetByName('Sheet1');
@@ -601,6 +601,10 @@ function setup() {
   PropertiesService.getScriptProperties().setProperty('SCHEMA_VER', String(CFG.SCHEMA_VER));
   var L = refresh_();
   log_('setup', 'version ' + VERSION);
+  return L;
+}
+function setup() {
+  var L = setupCore_();
   SpreadsheetApp.getUi().alert('169-E Rent ' + VERSION + ' is ready.\n\n' +
     L.year + ' balance: ' + fmtRs_(L.yearBalance) + '\n' +
     'Arrears up to Dec ' + (L.year - 1) + ': ' + fmtRs_(L.arrearsBefore) + '\n' +
@@ -707,6 +711,7 @@ function api_(b) {
     D.tenantLink = tenantLink_(); D.tenantLastView = props.getProperty('TENANT_LAST_VIEW') || '';
     return { ok: true, data: D };
   }
+  if (b.op === 'selfupdate') return selfUpdate_('the paired phone');
   if (b.op === 'push') return push_(b.items || []);
   if (b.op === 'upload') return upload_(b);
   if (b.op === 'file') return getFile_(b);
@@ -922,11 +927,54 @@ function tenantOffMenu() {
   ui.alert('Tenant page turned off.');
 }
 
-// Everything the loader may call.
+
+// ---------- updates that install themselves (asked for by the owner's phone; no visit to the Sheet) ----------
+var SELF_URL = 'https://raw.githubusercontent.com/IR1S-VIR1S/rent-169e/main/script/Rent.gs';
+function verNum_(v) { var p = String(v || '').split('.'); return (+p[0] || 0) * 1e6 + (+p[1] || 0) * 1e3 + (+p[2] || 0); }
+function selfCode_(p, prefix) { var n = +p.getProperty(prefix + 'N') || 0, s = ''; for (var i = 0; i < n; i++) s += p.getProperty(prefix + i) || ''; return s; }
+function selfWrite_(p, prefix, code) {
+  var old = +p.getProperty(prefix + 'N') || 0, n = Math.ceil(code.length / 7000), all = {};
+  for (var i = 0; i < n; i++) all[prefix + i] = code.slice(i * 7000, (i + 1) * 7000);
+  all[prefix + 'N'] = String(n);
+  p.setProperties(all);
+  for (var j = n; j < old; j++) p.deleteProperty(prefix + j);
+}
+function selfUpdate_(by) {
+  var p = PropertiesService.getScriptProperties();
+  if (!p.getProperty('CODE_N')) return { ok: false, error: 'This workbook was not installed with the Loader, so it cannot update itself.' };
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'The workbook is busy. It will try again.' };
+  try {
+    var r;
+    try { r = UrlFetchApp.fetch(SELF_URL + '?t=' + Date.now(), { muteHttpExceptions: true, followRedirects: true }); }
+    catch (e) { return { ok: false, error: 'Could not reach GitHub. Nothing was changed.' }; }
+    if (r.getResponseCode() !== 200) return { ok: false, error: 'Could not download the update (GitHub said ' + r.getResponseCode() + '). Nothing was changed.' };
+    var code = r.getContentText(), x;
+    try {
+      x = (new Function(code + '\n;return exports_();'))();
+      ['setup', 'setupQuiet', 'doPost', 'doGet', 'MENU_ITEMS', 'VERSION'].forEach(function (k) { if (!x || x[k] === undefined) throw new Error('missing ' + k); });
+    } catch (e2) { return { ok: false, error: 'The published update is broken (' + e2.message + '). Nothing was changed.' }; }
+    if (verNum_(x.VERSION) <= verNum_(VERSION)) return { ok: true, updated: false, version: VERSION };
+    var cur = selfCode_(p, 'CODE_'), curSha = p.getProperty('CODE_SHA') || '', curMenu = p.getProperty('MENU_JSON') || '[]';
+    selfWrite_(p, 'CODE_', code);
+    p.setProperty('CODE_SHA', sha_(code).slice(0, 8));
+    p.setProperty('MENU_JSON', JSON.stringify(x.MENU_ITEMS.map(function (m) { return m.label; })));
+    try { x.setupQuiet(); }
+    catch (e3) {
+      selfWrite_(p, 'CODE_', cur); p.setProperty('CODE_SHA', curSha); p.setProperty('MENU_JSON', curMenu);
+      log_('self update failed, put back', VERSION + ' kept: ' + String(e3 && e3.message || e3));
+      return { ok: false, error: 'The update could not be set up, so version ' + VERSION + ' was kept.' };
+    }
+    selfWrite_(p, 'PREV_', cur); p.setProperty('PREV_SHA', curSha);
+    log_('updated itself', VERSION + ' to ' + x.VERSION + (by ? ', asked by ' + by : ''));
+    return { ok: true, updated: true, from: VERSION, version: x.VERSION };
+  } finally { lock.releaseLock(); }
+}
+
 function exports_() {
   return {
     VERSION: VERSION, RELEASE_NOTE: RELEASE_NOTE, MENU_ITEMS: MENU_ITEMS,
-    setup: setup, refreshMenu: refreshMenu, pairPhone: pairPhone, changeWebAppUrl: changeWebAppUrl,
+    setup: setup, setupQuiet: setupCore_, refreshMenu: refreshMenu, pairPhone: pairPhone, changeWebAppUrl: changeWebAppUrl,
     disconnectAll: disconnectAll, tenantLinkMenu: tenantLinkMenu, tenantOffMenu: tenantOffMenu, doPost: doPost, doGet: doGet
   };
 }
