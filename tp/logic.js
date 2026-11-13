@@ -265,7 +265,7 @@ function urduSalut_(D) {
 function salamLine_(D) { var u = urduSalut_(D); return u ? u + '\u060c ' + CFG.SALAM : CFG.SALAM; }
 
 function wrapMsg_(D, body) {
-  return [salamLine_(D), '', salut_(D) + ',', ''].concat(body).concat(['', CFG.JAZAK]).join('\n');
+  return [salamLine_(D), ''].concat(urduSalut_(D) ? [] : [salut_(D) + ',', '']).concat(body).concat(['', CFG.JAZAK]).join('\n');
 }
 
 function balanceMessage_(D, L, pay, opts) {
@@ -405,4 +405,4 @@ function contactCounts_(D, from, to) {
   return C;
 }
 
-var NEED_SCRIPT = '2.7';
+var NEED_SCRIPT = '2.8';

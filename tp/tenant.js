@@ -138,7 +138,7 @@ function render() {
       el('div', { class: 'title', text: '169-E Rent' })), el('span', { class: 'sm muted', text: fmtDate_(TP.today) })),
     statusBar(),
     el('p', { class: 'arabic', dir: 'rtl', text: typeof salamLine_ === 'function' ? salamLine_(D) : CFG.SALAM }),
-    el('p', null, el('b', { text: salut_(D) + ',' }), ' this page shows your rent for ' + yr + '.'),
+    typeof urduSalut_ === 'function' && urduSalut_(D) ? el('p', { text: 'This page shows your rent for ' + yr + '.' }) : el('p', null, el('b', { text: salut_(D) + ',' }), ' this page shows your rent for ' + yr + '.'),
     el('div', { class: 'card hero' + (L.yearBalance <= 0 ? ' clear' : ''), id: 'tbal' },
       el('div', { class: 'lbl', text: L.yearBalance > 0 ? 'Remaining for ' + yr : 'Rent for ' + yr + ' is clear' }),
       el('div', { class: 'big', id: 'tbalval', text: fmtRs_(Math.max(L.yearBalance, 0)) }),

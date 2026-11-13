@@ -98,6 +98,7 @@ function greet_(g, y, D) {
   g.font = '600 ' + size + 'px ' + DRAW.AR;
   while (size > 30 && g.measureText(line).width > DRAW.W - 2 * DRAW.X) { size -= 2; g.font = '600 ' + size + 'px ' + DRAW.AR; }
   ar_(g, line, DRAW.W - DRAW.X, y + 40, size, DRAW.navy, 'right');
+  if (urduSalut_(D)) return y + 84; // his name is already on the salam line
   txt_(g, salut_(D) + ',', DRAW.X, y + 116, 40, 700);
   return y + 150;
 }
