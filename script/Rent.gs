@@ -4,7 +4,7 @@
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
 var VERSION = '2.6';
-var RELEASE_NOTE = '2.6: calls less than an hour apart count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var RELEASE_NOTE = '2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -367,18 +367,17 @@ function logSummary_(D, from, to) {
   return { from: from, to: to, count: count, visits: visits.length, flags: count.flag || 0,
     totalWait: waits.reduce(function (s, x) { return s + x; }, 0), items: items };
 }
-// Numbers in a WhatsApp chat log line, e.g. "He sent 1, you sent 4. You tried 3 times (7 calls, 2 tries not answered, talked 1 min). He tried once (1 call)."
-// A try is a run of calls less than an hour apart; the counts below are tries, not single calls.
+// Numbers in a WhatsApp chat log line, e.g. "He sent 1, you sent 4. You tried 2 times: 10:00 3 calls not answered; 15:00 2 calls answered (47 sec). He tried once: 18:10 1 call answered (20 sec)."
+// A try is the calls within an hour of its first call; i and he count tries, iNo and heNo the tries not answered.
 function chatNums_(notes) {
   var t = String(notes || ''), r = { mine: 0, his: 0, i: 0, iNo: 0, he: 0, heNo: 0 }, m;
   if ((m = /He sent (\d+), you sent (\d+)/.exec(t))) { r.his = +m[1]; r.mine = +m[2]; }
   [['You', 'i', 'iNo'], ['He', 'he', 'heNo']].forEach(function (w) {
-    var x = new RegExp(w[0] + ' tried (once|(\\d+) times)(?: \\(([^)]*)\\))?').exec(t);
+    var x = new RegExp(w[0] + ' tried (?:once|\\d+ times): ([^.]*)').exec(t);
     if (!x) return;
-    var n = x[1] === 'once' ? 1 : +x[2], inside = x[3] || '', k;
-    r[w[1]] = n;
-    if (/none answered|^\d+ calls?, not answered/.test(inside)) r[w[2]] = n;
-    else if ((k = /(\d+) tr(y|ies) not answered/.exec(inside))) r[w[2]] = +k[1];
+    var parts = x[1].split(';');
+    r[w[1]] = parts.length;
+    r[w[2]] = parts.filter(function (p) { return /not answered/.test(p); }).length;
   });
   return r;
 }

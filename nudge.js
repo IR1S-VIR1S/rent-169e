@@ -245,20 +245,20 @@ function guessTenant(names, tenant) {
 }
 function chatHash_(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 // One log line per day: who wrote how much, the calls each way (not answered, minutes talked), and up to three of his own messages (shortened), those about paying first.
-var CHAT_VER = 2; // raise when the reader changes, so the next import rewrites every day already imported
+var CHAT_VER = 4; // raise when the reader changes, so the next import rewrites every day already imported
 var CHAT_SYS = /^(you )?pinned a message$|^(you deleted this message|this message was deleted)\.?$|end-to-end encrypted|^null$/i;
 function chatSecs_(t) {
   var m = /(\d+)\s*(hr|hour|min|sec)/gi, x, s = 0;
   while ((x = m.exec(t))) s += +x[1] * (/^h/i.test(x[2]) ? 3600 : /^m/i.test(x[2]) ? 60 : 1);
   return s;
 }
-// Calls less than an hour apart (by the same caller) count as one try; a try is answered if any call in it was.
+// Calls by the same caller within an hour of the first call of a try count as that try; a try is answered if any call in it was.
 function chatTries_(list) {
   var tries = [];
   list.forEach(function (c) {
     var t = tries[tries.length - 1];
-    if (t && c.at - t.last <= 60) { t.calls++; t.last = c.at; t.ans = t.ans || c.ans; t.sec += c.sec; }
-    else tries.push({ calls: 1, last: c.at, ans: c.ans, sec: c.sec });
+    if (t && c.at - t.first <= 60) { t.calls++; t.ans = t.ans || c.ans; t.sec += c.sec; }
+    else tries.push({ calls: 1, first: c.at, ans: c.ans, sec: c.sec });
   });
   return tries;
 }
@@ -275,13 +275,15 @@ function chatDays(msgs, him, from, to) {
     if (call) { (isHim ? d.heC : d.iC).push(call); return; }
     if (isHim) { d.his++; if (!/omitted>?$|^<attached/i.test(t) && t) (CHAT_PROMISE.test(t) ? d.said : d.other).push(t.replace(/\s+/g, ' ').slice(0, 140)); } else d.mine++;
   });
+  function hm(m) { return pad2_(Math.floor(m / 60)) + ':' + pad2_(m % 60); }
+  // e.g. "You tried 2 times: 10:00 3 calls not answered; 15:00 2 calls answered (47 sec)"
   function calls(who, list) {
     if (!list.length) return '';
-    var tries = chatTries_(list), n = tries.length, no = tries.filter(function (x) { return !x.ans; }).length;
-    var sec = tries.reduce(function (s, x) { return s + x.sec; }, 0), x = [plural_(list.length, 'call')];
-    if (no) x.push(no === n ? (n === 1 ? 'not answered' : 'none answered') : plural_(no, 'try') .replace('trys', 'tries') + ' not answered');
-    if (sec) x.push('talked ' + (sec < 60 ? sec + ' sec' : Math.round(sec / 60) + ' min'));
-    return who + ' tried ' + (n === 1 ? 'once' : n + ' times') + ' (' + x.join(', ') + ')';
+    var tries = chatTries_(list), n = tries.length;
+    return who + ' tried ' + (n === 1 ? 'once' : n + ' times') + ': ' + tries.map(function (x) {
+      var talk = x.sec ? ' (' + (x.sec < 60 ? x.sec + ' sec' : Math.round(x.sec / 60) + ' min') + ')' : '';
+      return hm(x.first) + ' ' + plural_(x.calls, 'call') + ' ' + (x.ans ? 'answered' + talk : 'not answered');
+    }).join('; ');
   }
   return Object.keys(days).sort().map(function (k) {
     var d = days[k], bits = [];
