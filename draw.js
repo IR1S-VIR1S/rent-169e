@@ -142,7 +142,7 @@ function amount_(g, s, x, y, maxW) {
 // Contact since the last payment (the whole year when nothing was paid yet), under the months received:
 // the Contact Log picture without its Latest list, drawn smaller. Parts that do not fit above the footer are left out.
 function contactBlock_(g, y, v) {
-  var D = v.D, L = v.L, to = v.today, x = DRAW.X, w = DRAW.W - 2 * x, end = DRAW.H - 176;
+  var D = v.D, L = v.L, to = v.today, x = DRAW.X, w = DRAW.W - 2 * x, end = DRAW.H - 124;
   var payDay = (D.payments || []).reduce(function (m, p) { return p.date > m && p.date <= to ? p.date : m; }, '');
   var payAmt = (D.payments || []).reduce(function (t, p) { return p.date === payDay ? t + (Number(p.amount) || 0) : t; }, 0);
   var from = payDay || L.year + '-01-01', R = contactStory_(D, from, to), PAYC = '#2563EB';
@@ -242,7 +242,7 @@ function drawBalance(v, pay, arrears) {
   if (arrears) y = arrearsRows_(g, y, L);
   y = gridBlock_(g, y, L, D);
   contactBlock_(g, y, v);
-  footer_(g, rentLine_(D, v.today));
+  footer_(g, '');
   return o.c;
 }
 

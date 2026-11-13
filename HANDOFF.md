@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App cb8ed001 | Balance picture: the line 'Rent Rs ... a month, due by the 3rd.' removed from the bottom; the contact block may use that space | phone 54/54 x3 |
 | App c1957fc5 | Date pill (e.g. 7 Nov) above the blue last-payment square, on the Contact Log picture (both layouts) and the Balance picture | phone 54/54 x3 |
 | App 313707ff | Balance picture: the contact block is now the Contact Log panel without Latest, drawn smaller (You against He bars, four tiles, day-by-day squares, legend with the last payment marked), for the period since the last payment (the whole year when nothing is paid yet); parts that would not fit above the footer are left out | phone 54/54 x3 |
 | App 51b053d1 | Contact Log picture: new period Since last payment (from the latest payment date; chip shown only when a payment exists); the last payment day is a blue square with its own legend line (amount, date, days ago) and under it the amount still pending for the year (or clear) | phone 53/53 x3 |
