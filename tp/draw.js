@@ -1,7 +1,7 @@
 /* 169-E Rent: the four shareable phone-screen images, one design. 1080 x 1920. */
 'use strict';
 var LOGO = new Image(); LOGO.src = 'logo-160.png';
-var DRAW = { eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
+var DRAW = { me: 'Irfan', eurRate: 0, W: 1080, H: 1920, X: 56, F: '-apple-system, "Helvetica Neue", Arial, sans-serif',
   AR: '"Geeza Pro", "Noto Naskh Arabic", "Noto Sans Arabic", "Arial", sans-serif',
   navy: '#0b2a5b', gold: '#b07d1e', ink: '#111827', grey: '#4B5563', line: '#D1D5DB',
   blueBg: '#EFF6FF', blueLine: '#93C5FD', blueInk: '#1E3A8A', rust: '#9A3412', rustBg: '#FFEDD5', green: '#1D6B3A', red: '#B3261E' };
@@ -119,24 +119,33 @@ function gridBlock_(g, y, L, D) {
   return monthGrid_(g, y, L, D, true);
 }
 function eurTxt_(n) { var r = Number(DRAW.eurRate) || 0; return r > 0 ? '≈ €' + groupNum_(n / r) : ''; }
-function stamp_(g, cx, cy, text, color, size, line2) {
+function stamp_(g, cx, cy, text, color, size, line2, line3) {
   size = size || 76;
   g.save(); g.translate(cx, cy); g.rotate(line2 ? -0.1 : -0.26); g.globalAlpha = line2 ? 0.95 : 0.82;
   g.lineWidth = 9; g.strokeStyle = color; g.font = '900 ' + size + 'px ' + DRAW.F;
   var tw = g.measureText(text).width, s2 = Math.round(size * 1.5), tw2 = 0;
   if (line2) { g.font = '900 ' + s2 + 'px ' + DRAW.F; tw2 = g.measureText(line2).width; g.font = '900 ' + size + 'px ' + DRAW.F; }
-  var bw = Math.max(tw, tw2) + 56, bh = line2 ? size + s2 + 60 : Math.round(size * 1.47);
+  var s3 = Math.round(size * 0.56), tw3 = 0;
+  if (line3) { g.font = '900 ' + s3 + 'px ' + DRAW.F; tw3 = g.measureText(line3).width; g.font = '900 ' + size + 'px ' + DRAW.F; }
+  var bw = Math.max(tw, tw2, tw3) + 56, bh = (line2 ? size + s2 + 60 : Math.round(size * 1.47)) + (line3 ? s3 + 12 : 0);
   box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
   g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
   g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
   if (line2) {
     g.fillText(text, 0, -bh / 2 + 26 + size / 2);
-    g.font = '900 ' + s2 + 'px ' + DRAW.F; g.fillText(line2, 0, bh / 2 - 24 - s2 / 2 + 4);
+    g.font = '900 ' + s2 + 'px ' + DRAW.F; g.fillText(line2, 0, -bh / 2 + 26 + size + 6 + s2 / 2);
+    if (line3) { g.font = '900 ' + s3 + 'px ' + DRAW.F; g.fillText(line3, 0, bh / 2 - 26 - s3 / 2 + 2); }
   } else g.fillText(text, 0, 6);
   g.restore(); g.textBaseline = 'alphabetic';
 }
-// The OVERDUE stamp carries the number of days.
-function overdueStamp_(g, x, w, y, days) { stamp_(g, x + w - 180, y + 158, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase()); }
+// The OVERDUE stamp carries the number of days, and under it how long ago he last paid.
+function lastPaidText_(D, today) {
+  var d = (D.payments || []).reduce(function (m, p) { return p.date > m && p.date <= today ? p.date : m; }, '');
+  if (!d) return 'NOTHING PAID YET';
+  var n = dayNum_(today) - dayNum_(d);
+  return n === 0 ? 'LAST PAID TODAY' : 'LAST PAID ' + daysText_(n).toUpperCase() + ' AGO';
+}
+function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 180, y + 165, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : ''); }
 // The big amount, made smaller only when the stamp needs the room beside it.
 function amount_(g, s, x, y, maxW) {
   var size = 106; g.font = '800 ' + size + 'px ' + DRAW.F;
@@ -146,7 +155,7 @@ function amount_(g, s, x, y, maxW) {
 // Contact since the last payment (the whole year when nothing was paid yet), under the months received:
 // the Contact Log picture without its Latest list, drawn smaller. Parts that do not fit above the footer are left out.
 function contactBlock_(g, y, v) {
-  var D = v.D, L = v.L, to = v.today, x = DRAW.X, w = DRAW.W - 2 * x, end = DRAW.H - 124;
+  var D = v.D, L = v.L, to = v.today, x = DRAW.X, w = DRAW.W - 2 * x, end = DRAW.H - 64;
   var payDay = (D.payments || []).reduce(function (m, p) { return p.date > m && p.date <= to ? p.date : m; }, '');
   var payAmt = (D.payments || []).reduce(function (t, p) { return p.date === payDay ? t + (Number(p.amount) || 0) : t; }, 0);
   var from = payDay || L.year + '-01-01', R = contactStory_(D, from, to), PAYC = '#2563EB';
@@ -159,8 +168,8 @@ function contactBlock_(g, y, v) {
   // who reached out
   var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 40;
   box_(g, x, y, w, 158, '#F8FAFC', DRAW.line, 20);
-  [['You', mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
-    ['He', his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
+  [[DRAW.me, mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
+    [himName_(D), his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
     var by = y + 14 + i * 70;
     txt_(g, r[0] + ': ' + r[1], x + 20, by + 24, 26, 800, DRAW.ink);
     txt_(g, r[2], x + w - 20, by + 24, 22, 600, DRAW.grey, 'right');
@@ -172,7 +181,7 @@ function contactBlock_(g, y, v) {
   if (y + 118 > end) return y;
   var tiles = [['Calls made', String(R.calls), 'in ' + plural2_(R.tries, 'try').replace('trys', 'tries')],
     ['Tries answered', R.ans + ' of ' + R.tries, 'talked ' + talk_(R.sec), R.tries > 0 && R.ans < R.tries],
-    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days I reached out', R.daysNone > 0],
+    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days ' + DRAW.me + ' reached out', R.daysNone > 0],
     ['Last heard', R.lastHeard ? fmtDate_(R.lastHeard).replace(/ \d{4}$/, '') : 'Never', R.lastHeard ? (to === R.lastHeard ? 'today' : daysText_(dayNum_(to) - dayNum_(R.lastHeard)) + ' ago') : 'in this period']];
   var tw = (w - 3 * 12) / 4;
   tiles.forEach(function (t, i) {
@@ -183,18 +192,38 @@ function contactBlock_(g, y, v) {
     txt_(g, fit_(g, t[2], tw - 26, 18, 500), tx + 16, y + 100, 18, 500, DRAW.grey);
   });
   y += 130;
-  // day by day: up to 62 squares a row
-  var n = dayNum_(to) - dayNum_(from) + 1, rows = Math.ceil(n / 62), per = Math.ceil(n / rows), ch = rows === 1 ? 36 : 20, gap = rows === 1 ? 4 : 3, cw = (w - (per - 1) * gap) / per;
-  if (y + rows * (ch + gap) + 34 + 34 > end) return y;
-  var tags = [];
+  // day by day: the squares grow to fill the space left above the footer, each with its day of the month
+  var n = dayNum_(to) - dayNum_(from) + 1, gap = 6, legH = 34 + (n > 1 ? 34 : 0), avail = end - y - legH - 8;
+  if (avail < 40) return y;
+  var best = null;
+  for (var r = 1; r <= n; r++) {
+    var c = Math.ceil(n / r), cw0 = (w - (c - 1) * gap) / c, ch0 = (avail - (r - 1) * gap) / r;
+    if (ch0 < 18) break;
+    var score = Math.min(cw0, ch0);
+    if (!best || score > best.score) best = { r: r, c: c, cw: cw0, ch: ch0, score: score };
+  }
+  var rows = best.r, per = best.c, cw = best.cw, ch = Math.min(best.ch, Math.max(cw * 1.25, 40)), tags = [];
+  var fs = Math.max(13, Math.min(34, Math.floor(Math.min(cw, ch) * 0.42)));
   for (var i = 0; i < n; i++) {
-    var k = addDaysYmd_(from, i), q = R.days[k], bx = x + (i % per) * (cw + gap);
-    box_(g, bx, y + Math.floor(i / per) * (ch + gap), cw, ch, k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, rows === 1 ? 7 : 4);
+    var k = addDaysYmd_(from, i), q = R.days[k], bx = x + (i % per) * (cw + gap), by = y + Math.floor(i / per) * (ch + gap);
+    var col = k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, grey = col === '#EEF0F3';
+    box_(g, bx, by, cw, ch, col, null, Math.min(12, cw / 4));
+    var dd = +k.slice(8, 10), mon = dd === 1 || i === 0 ? CFG.MONTHS[+k.slice(5, 7) - 1].slice(0, 3) : '';
+    if (cw >= 22) {
+      var ink = grey ? DRAW.grey : '#FFFFFF';
+      if (mon && ch >= 34) { // month name above the day number on the first day and on each 1st
+        var ms = Math.max(11, Math.round(fs * 0.55)), ns = Math.min(fs, Math.floor((ch - ms) * 0.55));
+        txt_(g, mon, bx + cw / 2, by + ch / 2 - ns * 0.25, ms, 800, ink, 'center');
+        txt_(g, String(dd), bx + cw / 2, by + ch / 2 + ns * 0.85, ns, 800, ink, 'center');
+      } else txt_(g, String(dd), bx + cw / 2, by + ch / 2 + fs * 0.36, fs, 800, ink, 'center');
+    }
+    if (k === to && rows > 1) box_(g, bx - 1, by - 1, cw + 2, ch + 2, null, DRAW.navy, Math.min(12, cw / 4));
     if (k === payDay) tags[0] = { cx: bx + cw / 2, ymd: k, color: PAYC };
     if (k === to) tags[1] = { cx: bx + cw / 2, ymd: k, color: DRAW.navy };
   }
-  y = dateTags_(g, y + rows * (ch + gap) - gap, tags) + 2;
-  return dayLegend_(g, x, y, 19, !!payDay);
+  y += rows * (ch + gap) - gap;
+  if (rows === 1) y = dateTags_(g, y, tags) + 2; else y += 12;
+  return dayLegend_(g, x, y, 19, !!payDay, D);
 }
 
 // Payment receipt: same layout as the reminder, with a PAID stamp.
@@ -233,13 +262,12 @@ function drawBalance(v, pay, arrears) {
   amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 320 : w - 80);
   if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#E0B65A');
   cardLines_(g, x, y + 330, w, lines);
-  if (odb) overdueStamp_(g, x, w, y, R.days);
+  if (odb) overdueStamp_(g, x, w, y, R.days, D, v.today);
   y += ch + 30;
   if (pay) y = row_(g, y, 'Thank you for ' + fmtRs_(pay.amount), 'received ' + fmtDate_(pay.date), '', '#F0FDF4', '#86EFAC', DRAW.green);
   if (arrears) y = arrearsRows_(g, y, L);
   y = gridBlock_(g, y, L, D);
-  contactBlock_(g, y, v);
-  footer_(g, '');
+  contactBlock_(g, y, v); // no footer: the day squares use the space down to the bottom margin
   return o.c;
 }
 
@@ -253,7 +281,7 @@ function drawReminder(v, arrears) {
   txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
   amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 320 : w - 80);
   txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
-  if (od) overdueStamp_(g, x, w, y, R.days);
+  if (od) overdueStamp_(g, x, w, y, R.days, D, v.today);
   else { cardLines_(g, x, y + 330, w, [['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]); stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B'); }
   y += bh + 30;
   if (R.balanceBefore > 0) y = row_(g, y, 'Balance for ' + L.year, 'before this month', groupNum_(R.balanceBefore), DRAW.rustBg, '#FDBA74', DRAW.rust);
@@ -326,8 +354,8 @@ function drawLogSummary(v, from, to, title) {
   // 1. who reached out: two bars on the same scale
   var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 48;
   box_(g, x, y, w, 236, '#F8FAFC', DRAW.line);
-  [['You', mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
-    ['He', his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
+  [[DRAW.me, mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
+    [himName_(D), his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
     var by = y + 24 + i * 104;
     txt_(g, r[0] + ': ' + r[1], x + 24, by + 30, 32, 800, DRAW.ink);
     txt_(g, r[2], x + w - 24, by + 30, 26, 600, DRAW.grey, 'right');
@@ -338,7 +366,7 @@ function drawLogSummary(v, from, to, title) {
   // 2. the numbers
   var tiles = [['Calls made', String(R.calls), 'in ' + plural2_(R.tries, 'try').replace('trys', 'tries')],
     ['Tries answered', R.ans + ' of ' + R.tries, 'talked ' + talk_(R.sec), R.tries > 0 && R.ans < R.tries],
-    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days I reached out', R.daysNone > 0],
+    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days ' + DRAW.me + ' reached out', R.daysNone > 0],
     ['Last heard', R.lastHeard ? fmtDate_(R.lastHeard).replace(/ \d{4}$/, '') : 'Never', R.lastHeard ? (to === R.lastHeard ? 'today' : daysText_(dayNum_(to) - dayNum_(R.lastHeard)) + ' ago') : 'in this period']];
   var tw = (w - 3 * 14) / 4;
   tiles.forEach(function (t, i) {
@@ -391,7 +419,7 @@ function drawLogSummary(v, from, to, title) {
   }
   {
     var showPay = !!payDay && payDay >= from && payDay <= to;
-    y = dayLegend_(g, x, y, 21, showPay);
+    y = dayLegend_(g, x, y, 21, showPay, D);
     if (showPay) {
       var L = v.L, bal = L ? L.yearBalance : 0;
       txt_(g, 'Rent paid: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x, y + 20, 21, 700, DRAW.ink);
@@ -437,8 +465,8 @@ function dateTags_(g, top, tags) {
   return top + 34;
 }
 // Legend for the day squares; the blue Rent paid key is added when the payment day is shown. Wraps to a second row if needed.
-function dayLegend_(g, x, y, size, withPay) {
-  var items = [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']];
+function dayLegend_(g, x, y, size, withPay, D) {
+  var items = [[DRAW.red, DRAW.me + ' contacted, no response'], [DRAW.green, himName_(D) + ' replied, answered or called'], ['#EEF0F3', 'No contact']];
   if (withPay) items.push(['#2563EB', 'Rent paid']);
   var sq = size + 1, lx = x, step = size + 13;
   g.font = '600 ' + size + 'px ' + DRAW.F;
@@ -450,4 +478,6 @@ function dayLegend_(g, x, y, size, withPay) {
   });
   return y + step;
 }
+// Names on the pictures: the owner, and the tenant's first name (they are sent to him, so never "you" or "he").
+function himName_(D) { var t = D && D.tenancy && String(D.tenancy.tenant || '').trim().split(/\s+/)[0]; return t || 'Tenant'; }
 function plural2_(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
