@@ -148,7 +148,7 @@ function contactBlock_(g, y, v) {
   var from = payDay || L.year + '-01-01', R = contactStory_(D, from, to), PAYC = '#2563EB';
   if (!R.daysMe && !R.daysHe) return y;
   if (y + 44 + 170 > end) return y;
-  y += 10; txt_(g, payDay ? 'Contact since last payment (' + fmtDate_(payDay) + ')' : 'Contact in ' + L.year, x, y + 22, 34, 800); y += 40;
+  y += 10; txt_(g, payDay ? fit_(g, 'Contact since last payment of ' + fmtRs_(payAmt) + ' (' + fmtDate_(payDay) + ')', w, 32, 800) : 'Contact in ' + L.year, x, y + 22, 32, 800); y += 40;
   // who reached out
   var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 40;
   box_(g, x, y, w, 158, '#F8FAFC', DRAW.line, 20);
@@ -186,18 +186,7 @@ function contactBlock_(g, y, v) {
   }
   if (payDay) payTag_(g, x + cw / 2, y, payDay);
   y += rows * (ch + gap) + 6;
-  var lx = x, items = [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']];
-  items.forEach(function (l) {
-    box_(g, lx, y + 2, 18, 18, l[0], null, 5); txt_(g, l[1], lx + 25, y + 18, 19, 600, DRAW.grey);
-    g.font = '600 19px ' + DRAW.F; lx += 25 + g.measureText(l[1]).width + 20;
-  });
-  y += 30;
-  if (payDay && y + 28 <= end) {
-    box_(g, x, y + 2, 18, 18, PAYC, null, 5);
-    txt_(g, 'Last payment: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x + 25, y + 18, 19, 700, DRAW.ink);
-    y += 30;
-  }
-  return y;
+  return dayLegend_(g, x, y, 19, !!payDay);
 }
 
 // Payment receipt: same layout as the reminder, with a PAID stamp.
@@ -396,20 +385,14 @@ function drawLogSummary(v, from, to, title) {
     y += 2;
   }
   {
-    var lx = x;
-    [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']].forEach(function (l) {
-      box_(g, lx, y + 2, 22, 22, l[0], null, 6); txt_(g, l[1], lx + 30, y + 20, 21, 600, DRAW.grey);
-      g.font = '600 21px ' + DRAW.F; lx += 30 + g.measureText(l[1]).width + 26;
-    });
-    y += 34;
-    if (payDay && payDay >= from && payDay <= to) {
-      box_(g, x, y + 2, 22, 22, PAYC, null, 6);
-      txt_(g, 'Last payment: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x + 30, y + 20, 21, 700, DRAW.ink);
-      y += 34;
+    var showPay = !!payDay && payDay >= from && payDay <= to;
+    y = dayLegend_(g, x, y, 21, showPay);
+    if (showPay) {
       var L = v.L, bal = L ? L.yearBalance : 0;
-      if (L && bal > 0) txt_(g, 'Pending for ' + L.year + ' since that day: ' + fmtRs_(bal), x + 30, y + 20, 21, 800, DRAW.rust);
-      else if (L) txt_(g, 'Rent for ' + L.year + ' is clear up to now', x + 30, y + 20, 21, 700, DRAW.green);
-      if (L) y += 34;
+      txt_(g, 'Rent paid: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x, y + 20, 21, 700, DRAW.ink);
+      y += 34;
+      if (L && bal > 0) { txt_(g, 'Pending for ' + L.year + ' since that day: ' + fmtRs_(bal), x, y + 20, 21, 800, DRAW.rust); y += 34; }
+      else if (L) { txt_(g, 'Rent for ' + L.year + ' is clear up to now', x, y + 20, 21, 700, DRAW.green); y += 34; }
     }
     y += 10;
   }
@@ -437,5 +420,19 @@ function payTag_(g, cx, top, ymd) {
   var tw = g.measureText(t).width + 16, x0 = Math.min(Math.max(cx - tw / 2, DRAW.X), DRAW.W - DRAW.X - tw);
   box_(g, x0, top - 28, tw, 24, '#FFFFFF', '#2563EB', 8);
   txt_(g, t, x0 + tw / 2, top - 10, 19, 800, '#2563EB', 'center');
+}
+// Legend for the day squares; the blue Rent paid key is added when the payment day is shown. Wraps to a second row if needed.
+function dayLegend_(g, x, y, size, withPay) {
+  var items = [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']];
+  if (withPay) items.push(['#2563EB', 'Rent paid']);
+  var sq = size + 1, lx = x, step = size + 13;
+  g.font = '600 ' + size + 'px ' + DRAW.F;
+  items.forEach(function (l) {
+    var wd = sq + 8 + g.measureText(l[1]).width;
+    if (lx > x && lx + wd > DRAW.W - DRAW.X) { lx = x; y += step; }
+    box_(g, lx, y + 2, sq, sq, l[0], null, 5); txt_(g, l[1], lx + sq + 8, y + size - 1, size, 600, DRAW.grey);
+    g.font = '600 ' + size + 'px ' + DRAW.F; lx += wd + 20;
+  });
+  return y + step;
 }
 function plural2_(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }

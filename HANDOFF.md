@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| App c7c877fd | Blue square has its own legend key 'Rent paid' in the legend row (dayLegend_, wraps if needed). Balance picture: the separate last-payment line removed, the amount goes in the heading ('Contact since last payment of Rs N (date)'). Contact Log picture: detail line reads 'Rent paid: Rs N on date, N days ago', then the pending amount | phone 54/54 x3 |
 | App cb8ed001 | Balance picture: the line 'Rent Rs ... a month, due by the 3rd.' removed from the bottom; the contact block may use that space | phone 54/54 x3 |
 | App c1957fc5 | Date pill (e.g. 7 Nov) above the blue last-payment square, on the Contact Log picture (both layouts) and the Balance picture | phone 54/54 x3 |
 | App 313707ff | Balance picture: the contact block is now the Contact Log panel without Latest, drawn smaller (You against He bars, four tiles, day-by-day squares, legend with the last payment marked), for the period since the last payment (the whole year when nothing is paid yet); parts that would not fit above the footer are left out | phone 54/54 x3 |
