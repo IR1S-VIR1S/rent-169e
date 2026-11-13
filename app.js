@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'c7c877fd';
+var BUILD_ID = '84251453';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -884,7 +884,7 @@ function openImg(kind, pay) {
 function lastPayDate(D) { return (D.payments || []).reduce(function (m, x) { return x.date > m ? x.date : m; }, ''); }
 function logPeriod(p, today, D) {
   var lp = D ? lastPayDate(D) : '';
-  if (p === 'pay' && lp) return { from: lp, title: 'Since last payment' };
+  if (p === 'pay' && lp) return { from: lp, title: 'Since last payment', days: dayNum_(today) - dayNum_(lp) };
   if (p === 'year') return { from: today.slice(0, 4) + '-01-01', title: 'This year' };
   if (p === 'all') return { from: CFG.EARLIEST, title: 'All entries' };
   if (p === '60' || p === '90') return { from: addDaysYmd_(today, -(+p)), title: 'Last ' + p + ' days' };
@@ -904,7 +904,7 @@ SCREENS.image = function () {
     c = drawReceipt(v, p, I.arrears); title = 'Receipt'; name = 'Rent_Receipt_' + (p.pay_id || p.date);
     caption = balanceMessage_(v.D, v.L, p, { arrears: I.arrears });
   } else if (I.kind === 'reminder') { c = drawReminder(v, I.arrears); title = 'Rent reminder'; name = 'Rent_Reminder_' + v.today.slice(0, 7); caption = reminderMessage_(v.D, v.L, v.today, { arrears: I.arrears }); }
-  else { var P = logPeriod(I.period, v.today, v.D); c = drawLogSummary(v, P.from, v.today, P.title); title = 'Contact log summary'; name = 'Contact_Log_' + v.today; }
+  else { var P = logPeriod(I.period, v.today, v.D); c = drawLogSummary(v, P.from, v.today, P.days !== undefined ? P.title + ' (' + (P.days ? daysText_(P.days) + ' ago' : 'today') + ')' : P.title); title = 'Contact log summary'; name = 'Contact_Log_' + v.today; }
   name += '_' + v.today + '.png';
   var img = el('img', { class: 'stmt', id: 'stmtimg', alt: title });
   c.toBlob(function (b) {

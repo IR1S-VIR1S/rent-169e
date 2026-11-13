@@ -94,7 +94,10 @@ function drawStatement(v, withArrears) {
 
 // Shared layout for the tenant-facing pictures: header, greeting, a navy card, then rows and the month grid.
 function greet_(g, y, D) {
-  ar_(g, CFG.SALAM, DRAW.W - DRAW.X, y + 40, 46, DRAW.navy, 'right');
+  var line = salamLine_(D), size = 46;
+  g.font = '600 ' + size + 'px ' + DRAW.AR;
+  while (size > 30 && g.measureText(line).width > DRAW.W - 2 * DRAW.X) { size -= 2; g.font = '600 ' + size + 'px ' + DRAW.AR; }
+  ar_(g, line, DRAW.W - DRAW.X, y + 40, size, DRAW.navy, 'right');
   txt_(g, salut_(D) + ',', DRAW.X, y + 116, 40, 700);
   return y + 150;
 }
@@ -148,7 +151,10 @@ function contactBlock_(g, y, v) {
   var from = payDay || L.year + '-01-01', R = contactStory_(D, from, to), PAYC = '#2563EB';
   if (!R.daysMe && !R.daysHe) return y;
   if (y + 44 + 170 > end) return y;
-  y += 10; txt_(g, payDay ? fit_(g, 'Contact since last payment of ' + fmtRs_(payAmt) + ' (' + fmtDate_(payDay) + ')', w, 32, 800) : 'Contact in ' + L.year, x, y + 22, 32, 800); y += 40;
+  var head = payDay ? 'Contact since last payment of ' + fmtRs_(payAmt) + ' (' + fmtDate_(payDay) + (payDay === to ? ', today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago)') : 'Contact in ' + L.year, hs = 32;
+  g.font = '800 ' + hs + 'px ' + DRAW.F;
+  while (hs > 24 && g.measureText(head).width > w) { hs -= 1; g.font = '800 ' + hs + 'px ' + DRAW.F; }
+  y += 10; txt_(g, fit_(g, head, w, hs, 800), x, y + 22, hs, 800); y += 40;
   // who reached out
   var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 40;
   box_(g, x, y, w, 158, '#F8FAFC', DRAW.line, 20);
@@ -178,14 +184,15 @@ function contactBlock_(g, y, v) {
   y += 130;
   // day by day: up to 62 squares a row
   var n = dayNum_(to) - dayNum_(from) + 1, rows = Math.ceil(n / 62), per = Math.ceil(n / rows), ch = rows === 1 ? 36 : 20, gap = rows === 1 ? 4 : 3, cw = (w - (per - 1) * gap) / per;
-  if (y + rows * (ch + gap) + 34 + (payDay ? 24 : 0) > end) return y;
-  if (payDay) y += 24;
+  if (y + rows * (ch + gap) + 34 + 34 > end) return y;
+  var tags = [];
   for (var i = 0; i < n; i++) {
-    var k = addDaysYmd_(from, i), q = R.days[k];
-    box_(g, x + (i % per) * (cw + gap), y + Math.floor(i / per) * (ch + gap), cw, ch, k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, rows === 1 ? 7 : 4);
+    var k = addDaysYmd_(from, i), q = R.days[k], bx = x + (i % per) * (cw + gap);
+    box_(g, bx, y + Math.floor(i / per) * (ch + gap), cw, ch, k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, rows === 1 ? 7 : 4);
+    if (k === payDay) tags[0] = { cx: bx + cw / 2, ymd: k, color: PAYC };
+    if (k === to) tags[1] = { cx: bx + cw / 2, ymd: k, color: DRAW.navy };
   }
-  if (payDay) payTag_(g, x + cw / 2, y, payDay);
-  y += rows * (ch + gap) + 6;
+  y = dateTags_(g, y + rows * (ch + gap) - gap, tags) + 2;
   return dayLegend_(g, x, y, 19, !!payDay);
 }
 
@@ -352,24 +359,21 @@ function drawLogSummary(v, from, to, title) {
   function dayCol(k) { var q = R.days[k]; if (k === payDay) return PAYC; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
   if (n <= 62) {
     txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
-    var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per, tag = null;
-    if (payDay >= from && payDay <= to) y += 26;
+    var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per, tags = [];
     for (var i = 0; i < n; i++) {
       var k = addDaysYmd_(from, i), cx = x + (i % per) * (cw + gap), cy = y + Math.floor(i / per) * 62;
       box_(g, cx, cy, cw, 54, dayCol(k), null, 8);
-      if (k === payDay) tag = [cx + cw / 2, cy];
+      if (k === payDay) tags[0] = { cx: cx + cw / 2, ymd: k, color: PAYC };
+      if (k === to) tags[1] = { cx: cx + cw / 2, ymd: k, color: DRAW.navy };
+      if (i === 0) tags[2] = { cx: cx + cw / 2, ymd: k, color: DRAW.grey };
     }
-    if (tag) payTag_(g, tag[0], tag[1], payDay);
-    y += Math.ceil(n / per) * 62 + 4;
-    txt_(g, fmtDate_(from).replace(/ \d{4}$/, ''), x, y + 20, 21, 600, DRAW.grey); txt_(g, fmtDate_(to).replace(/ \d{4}$/, ''), x + w, y + 20, 21, 600, DRAW.grey, 'right');
-    y += 34;
+    y = dateTags_(g, y + Math.ceil(n / per) * 62 - 8, tags) + 8;
   } else {
     // longer periods: one small row per month, the whole period (All entries: from the first entry, 12 months at most)
     var keys = Object.keys(R.days).sort(), first = n > 366 && keys.length && keys[0] > from ? keys[0] : from, months = [], ym = to.slice(0, 7);
     while (ym >= first.slice(0, 7) && months.length < 12) { months.unshift(ym); var yy = +ym.slice(0, 4), mm = +ym.slice(5, 7) - 1; if (mm < 1) { mm = 12; yy--; } ym = yy + '-' + pad2_(mm); }
     txt_(g, 'Day by day' + (months[0] > first.slice(0, 7) ? ' (last 12 months)' : ''), x, y + 30, 34, 800); y += 46;
-    var lab = 132, g2 = 3, mw = (w - lab - 30 * g2) / 31, tag2 = null;
-    if (payDay >= from && payDay <= to) y += 26;
+    var lab = 132, g2 = 3, mw = (w - lab - 30 * g2) / 31, tags2 = [];
     months.forEach(function (m) {
       var yy = +m.slice(0, 4), mm = +m.slice(5, 7), dim = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
       txt_(g, CFG.MONTHS[mm - 1].slice(0, 3) + ' ' + yy, x, y + 20, 21, 700, DRAW.grey);
@@ -377,12 +381,12 @@ function drawLogSummary(v, from, to, title) {
         var k = m + '-' + pad2_(dd);
         if (k < from || k > to) continue;
         box_(g, x + lab + (dd - 1) * (mw + g2), y, mw, 24, dayCol(k), null, 5);
-        if (k === payDay) tag2 = [x + lab + (dd - 1) * (mw + g2) + mw / 2, y];
+        if (k === payDay) tags2[0] = { cx: x + lab + (dd - 1) * (mw + g2) + mw / 2, ymd: k, color: PAYC };
+        if (k === to) tags2[1] = { cx: x + lab + (dd - 1) * (mw + g2) + mw / 2, ymd: k, color: DRAW.navy };
       }
       y += 30;
     });
-    if (tag2) payTag_(g, tag2[0], tag2[1], payDay);
-    y += 2;
+    y = dateTags_(g, y - 6, tags2) + 6;
   }
   {
     var showPay = !!payDay && payDay >= from && payDay <= to;
@@ -414,12 +418,22 @@ function drawLogSummary(v, from, to, title) {
   footer_(g, '');
   return o.c;
 }
-// Date pill above the blue last-payment square, kept inside the picture's margins.
-function payTag_(g, cx, top, ymd) {
-  var t = fmtDate_(ymd).replace(/ \d{4}$/, ''); g.font = '800 19px ' + DRAW.F;
-  var tw = g.measureText(t).width + 16, x0 = Math.min(Math.max(cx - tw / 2, DRAW.X), DRAW.W - DRAW.X - tw);
-  box_(g, x0, top - 28, tw, 24, '#FFFFFF', '#2563EB', 8);
-  txt_(g, t, x0 + tw / 2, top - 10, 19, 800, '#2563EB', 'center');
+// Date pills under the day squares: the payment day (blue), today (navy) and the first day (grey), each under its own square.
+// tags: [{ cx, ymd, color }] in order of importance; one that would overlap a more important one is left out.
+function dateTags_(g, top, tags) {
+  var placed = [];
+  g.font = '800 19px ' + DRAW.F;
+  tags.forEach(function (t) {
+    if (!t) return;
+    var s = fmtDate_(t.ymd).replace(/ \d{4}$/, ''), tw = g.measureText(s).width + 16;
+    var x0 = Math.min(Math.max(t.cx - tw / 2, DRAW.X), DRAW.W - DRAW.X - tw);
+    if (placed.some(function (p) { return x0 < p[1] + 8 && x0 + tw > p[0] - 8; })) return;
+    placed.push([x0, x0 + tw]);
+    box_(g, x0, top + 4, tw, 24, '#FFFFFF', t.color, 8);
+    txt_(g, s, x0 + tw / 2, top + 22, 19, 800, t.color, 'center');
+    g.font = '800 19px ' + DRAW.F;
+  });
+  return top + 34;
 }
 // Legend for the day squares; the blue Rent paid key is added when the payment day is shown. Wraps to a second row if needed.
 function dayLegend_(g, x, y, size, withPay) {

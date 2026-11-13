@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.6';
-var RELEASE_NOTE = '2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.7';
+var RELEASE_NOTE = '2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -266,8 +266,17 @@ function salut_(D) {
 
 function byLabel_(D, by) { return by === 'Tenant' && D.tenancy && D.tenancy.tenant ? D.tenancy.tenant : by; }
 
+// His name in Urdu for the salam line ("Kashif" > کاشف بھائی); empty for a name not in the list.
+var URDU_NAMES = { kashif: '\u06a9\u0627\u0634\u0641' };
+function urduSalut_(D) {
+  var t = D.tenancy || {}, first = String(t.tenant || '').trim().split(/\s+/)[0].toLowerCase();
+  return URDU_NAMES[first] ? URDU_NAMES[first] + ' \u0628\u06be\u0627\u0626\u06cc' : '';
+}
+// Name first, an Urdu comma, then the salam: read right to left as one line.
+function salamLine_(D) { var u = urduSalut_(D); return u ? u + '\u060c ' + CFG.SALAM : CFG.SALAM; }
+
 function wrapMsg_(D, body) {
-  return [CFG.SALAM, '', salut_(D) + ',', ''].concat(body).concat(['', CFG.JAZAK]).join('\n');
+  return [salamLine_(D), '', salut_(D) + ',', ''].concat(body).concat(['', CFG.JAZAK]).join('\n');
 }
 
 function balanceMessage_(D, L, pay, opts) {

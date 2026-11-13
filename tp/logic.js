@@ -255,8 +255,17 @@ function salut_(D) {
 
 function byLabel_(D, by) { return by === 'Tenant' && D.tenancy && D.tenancy.tenant ? D.tenancy.tenant : by; }
 
+// His name in Urdu for the salam line ("Kashif" > کاشف بھائی); empty for a name not in the list.
+var URDU_NAMES = { kashif: '\u06a9\u0627\u0634\u0641' };
+function urduSalut_(D) {
+  var t = D.tenancy || {}, first = String(t.tenant || '').trim().split(/\s+/)[0].toLowerCase();
+  return URDU_NAMES[first] ? URDU_NAMES[first] + ' \u0628\u06be\u0627\u0626\u06cc' : '';
+}
+// Name first, an Urdu comma, then the salam: read right to left as one line.
+function salamLine_(D) { var u = urduSalut_(D); return u ? u + '\u060c ' + CFG.SALAM : CFG.SALAM; }
+
 function wrapMsg_(D, body) {
-  return [CFG.SALAM, '', salut_(D) + ',', ''].concat(body).concat(['', CFG.JAZAK]).join('\n');
+  return [salamLine_(D), '', salut_(D) + ',', ''].concat(body).concat(['', CFG.JAZAK]).join('\n');
 }
 
 function balanceMessage_(D, L, pay, opts) {
@@ -396,4 +405,4 @@ function contactCounts_(D, from, to) {
   return C;
 }
 
-var NEED_SCRIPT = '2.6';
+var NEED_SCRIPT = '2.7';

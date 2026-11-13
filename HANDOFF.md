@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| Script 2.7 | 84251453 | His name in Urdu (URDU_NAMES map: Kashif) before the salam on one line, in every message (wrapMsg_), every picture (greet_, shrinks to fit) and the tenant page. Balance contact heading adds 'N days ago' and shrinks to fit; Contact Log subtitle for Since last payment adds '(N days ago)'. Date pills under the squares (dateTags_): payment day in blue under the blue square, today in navy under the last square, first day in grey on the 30 to 60 day strip; a pill that would overlap a more important one is left out | phone 55/55 x3, selfupdate 6/6 |
 | App c7c877fd | Blue square has its own legend key 'Rent paid' in the legend row (dayLegend_, wraps if needed). Balance picture: the separate last-payment line removed, the amount goes in the heading ('Contact since last payment of Rs N (date)'). Contact Log picture: detail line reads 'Rent paid: Rs N on date, N days ago', then the pending amount | phone 54/54 x3 |
 | App cb8ed001 | Balance picture: the line 'Rent Rs ... a month, due by the 3rd.' removed from the bottom; the contact block may use that space | phone 54/54 x3 |
 | App c1957fc5 | Date pill (e.g. 7 Nov) above the blue last-payment square, on the Contact Log picture (both layouts) and the Balance picture | phone 54/54 x3 |
