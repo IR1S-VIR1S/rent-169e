@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'effa11be';
+var BUILD_ID = 'df39e854';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -152,19 +152,23 @@ function queue(item) {
   S.outbox.push(item);
   return saveState();
 }
+// Entries a workbook older than 2.4 does not know yet wait on the phone instead of being refused.
+var NEW_KINDS = { wa_chat: '2.4', no_answer: '2.4' };
+function heldBack(S, o) { return o.op === 'log' && NEW_KINDS[o.kind] && S.data && verNum(S.data.version) < verNum(NEW_KINDS[o.kind]); }
+function retryItem(o) { delete o.error; delete o.errVer; return saveState().then(function () { render(); sync(true); }); }
 function sync(quiet) {
   if (T.syncing) { T.syncAgain = true; return T.syncP || Promise.resolve(); }
   if (!T.S || !T.S.token) return Promise.resolve();
   if (!navigator.onLine) { if (!quiet) toast('No signal. Saved on this phone.'); softRender(); return Promise.resolve(); }
   T.syncing = true; renderTop();
-  var S = T.S, items = S.outbox.filter(function (x) { return !x.error; }), done = {};
+  var S = T.S, items = S.outbox.filter(function (x) { return !x.error && !heldBack(S, x); }), done = {};
   var p = items.length ? api({ op: 'push', token: S.token, items: items }) : Promise.resolve({ ok: true, results: [] });
   var chain = p.then(function (r) {
     if (!r.ok) throw r;
     (r.results || []).forEach(function (res) {
       var i = S.outbox.findIndex(function (x) { return x.req_id === res.req_id; });
       if (i < 0) return;
-      if (res.ok) done[res.req_id] = 1; else S.outbox[i].error = res.error;
+      if (res.ok) done[res.req_id] = 1; else { S.outbox[i].error = res.error; S.outbox[i].errVer = S.data ? S.data.version : ''; }
     });
     return sendPhotos(S);
   }).then(function () {
@@ -174,6 +178,8 @@ function sync(quiet) {
     if (T.S !== S) return;
     S.data = r.data; S.lastSync = Date.now(); S.syncErr = '';
     S.outbox = S.outbox.filter(function (x) { return !done[x.req_id]; });
+    // a refused entry is tried again once the workbook has a different script version
+    S.outbox.forEach(function (x) { if (x.error && x.errVer !== S.data.version) { delete x.error; delete x.errVer; T.syncAgain = true; } });
     return saveState().then(function () { return autoScript(S); });
   }).catch(function (e) {
     if (T.S !== S) return;
@@ -234,7 +240,7 @@ function view() {
   D.logs = D.logs.filter(function (g) { return !gone['L:' + g.key]; });
   D.visits = D.visits.filter(function (v) { return !gone['V:' + v.key]; });
   S.outbox.forEach(function (o) {
-    var mark = { pending: true, error: o.error };
+    var mark = { pending: true, error: o.error, held: !o.error && heldBack(S, o) };
     if (o.op === 'pay') D.payments.push(Object.assign({ pay_id: '', key: o.req_id, date: o.date, amount: o.amount, into: o.into, by: o.by, eur: o.eur, note: o.note }, mark));
     if (o.op === 'claim' && !o.statusOnly && !D.claims.some(function (c) { return c.key === o.key; })) {
       D.claims.push(Object.assign({ claim_id: '', key: o.key, date: o.date, amount: o.amount, desc: o.desc, status: o.status || 'counted' }, mark));
@@ -819,7 +825,7 @@ function logRow(it) {
     el('span', { class: 'lic' }, svg(LOG_ICON[it.kind] || 'log')),
     el('div', { class: 'grow' }, el('b', { text: flag ? 'Red flag: ' + it.flag : kindLabel_(it.kind) }),
       el('div', { class: 'sm', text: sub }),
-      it.pending ? el('div', { class: 'pending', text: it.error ? 'Refused: ' + it.error : 'Waiting to send' }) : null),
+      it.pending ? el('div', { class: 'pending', text: it.error ? 'Not accepted by the Sheet. Tap to try again.' : it.held ? 'Waits for the workbook update' : 'Waiting to send' }) : null),
     el('div', { class: 'sm right', text: fmtDate_(it.date) + (it.time ? '\n' + it.time : '') }));
 }
 function openLogSheet(it) {
@@ -829,6 +835,12 @@ function openLogSheet(it) {
       el('p', { class: 'muted', text: fmtDate_(it.date) + (it.time ? ' · ' + it.time : '') }),
       it.type === 'visit' ? el('p', { text: ['Left ' + (it.left || '?'), 'arrived ' + (it.arrived || '?'), it.met ? 'met ' + it.met : '', 'left EME ' + (it.departed || '?')].filter(Boolean).join(', ') }) : null,
       it.notes ? el('p', { class: 'pre', text: it.notes }) : null,
+      it.pending && it.error ? el('div', { class: 'err', text: 'The Sheet did not accept this: ' + it.error }) : null,
+      it.pending && it.held ? el('div', { class: 'note', text: 'Kept on this phone until the workbook is updated: in the Sheet use 169-E Rent > Install update. It is then sent by itself.' }) : null,
+      it.pending && it.error ? btn('primary wide', 'sync', 'Try again', function () {
+        var o = T.S.outbox.filter(function (x) { return x.key === it.key && x.error; })[0];
+        T.sheet = null; if (o) retryItem(o); else render();
+      }, 'logretry') : null,
       btn('danger wide', 'trash', 'Delete this entry', function () {
         if (!confirm('Delete this entry?')) return;
         var op = it.type === 'visit' ? 'visitdel' : 'logdel', pop = it.type === 'visit' ? 'visit' : 'log';
@@ -920,6 +932,7 @@ SCREENS.settings = function () {
     refused.length ? el('div', { class: 'card' }, el('b', { text: 'Not accepted by the sheet' }),
       refused.map(function (o) {
         return el('div', { class: 'row' }, el('div', null, el('div', { text: o.op + (o.amount ? ' ' + fmtRs_(o.amount) : '') + (o.date ? ' ' + fmtDate_(o.date) : '') }), el('div', { class: 'sm', text: o.error })),
+          btn('small', 'sync', 'Try again', function () { retryItem(o); }),
           btn('danger small', 'trash', 'Remove', function () { S.outbox = S.outbox.filter(function (x) { return x !== o; }); saveState().then(render); }));
       })) : null,
     el('div', { class: 'card' },
