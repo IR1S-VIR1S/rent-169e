@@ -315,7 +315,9 @@ function drawLogSummary(v, from, to, title) {
   if (small.length) { txt_(g, small.map(function (t) { return t[0] + ': ' + t[1]; }).join('   ·   '), x, y + 26, 27, 700, S.flags ? DRAW.red : DRAW.ink); y += 52; }
   // 3. day by day (up to 62 days)
   var n = dayNum_(to) - dayNum_(from) + 1, legendAt;
-  function dayCol(k) { var q = R.days[k]; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
+  var payDay = (D.payments || []).reduce(function (m, p) { return p.date > m ? p.date : m; }, ''), PAYC = '#2563EB';
+  var payAmt = (D.payments || []).reduce(function (t, p) { return p.date === payDay ? t + (Number(p.amount) || 0) : t; }, 0);
+  function dayCol(k) { var q = R.days[k]; if (k === payDay) return PAYC; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
   if (n <= 62) {
     txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
     var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per;
@@ -350,7 +352,17 @@ function drawLogSummary(v, from, to, title) {
       box_(g, lx, y + 2, 22, 22, l[0], null, 6); txt_(g, l[1], lx + 30, y + 20, 21, 600, DRAW.grey);
       g.font = '600 21px ' + DRAW.F; lx += 30 + g.measureText(l[1]).width + 26;
     });
-    y += 44;
+    y += 34;
+    if (payDay && payDay >= from && payDay <= to) {
+      box_(g, x, y + 2, 22, 22, PAYC, null, 6);
+      txt_(g, 'Last payment: ' + fmtRs_(payAmt) + ' on ' + fmtDate_(payDay) + (payDay === to ? ' (today)' : ', ' + daysText_(dayNum_(to) - dayNum_(payDay)) + ' ago'), x + 30, y + 20, 21, 700, DRAW.ink);
+      y += 34;
+      var L = v.L, bal = L ? L.yearBalance : 0;
+      if (L && bal > 0) txt_(g, 'Pending for ' + L.year + ' since that day: ' + fmtRs_(bal), x + 30, y + 20, 21, 800, DRAW.rust);
+      else if (L) txt_(g, 'Rent for ' + L.year + ' is clear up to now', x + 30, y + 20, 21, 700, DRAW.green);
+      if (L) y += 34;
+    }
+    y += 10;
   }
   // 4. latest entries, two lines each
   txt_(g, 'Latest', x, y + 30, 34, 800); y += 46;
