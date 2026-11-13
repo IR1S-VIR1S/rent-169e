@@ -44,7 +44,8 @@ function nudgeMessage(v, stage, K, F) {
   var D = v.D, L = v.L, R = K.R, b = [];
   var rent = fmtRs_(R ? R.unpaid || R.rent : Math.max(L.yearBalance, 0)), month = R ? monthName_(R.month) : String(L.year);
   var days = R && K.overdue ? daysText_(R.days) : '', due = R ? fmtDate_(R.due) : '';
-  var state = K.overdue ? 'Rent of ' + rent + ' for ' + month + ' was due on ' + due + ' and is now ' + days + ' overdue.'
+  var state = K.overdue && R.since ? 'Rent has been unpaid since ' + monthName_(R.since) + ' (due ' + fmtDate_(R.sinceDue) + '), now ' + days + ' overdue. The balance for ' + L.year + ' stands at ' + fmtRs_(Math.max(L.yearBalance, 0)) + '.'
+    : K.overdue ? 'Rent of ' + rent + ' for ' + month + ' was due on ' + due + ' and is now ' + days + ' overdue.'
     : 'The balance for ' + L.year + ' stands at ' + fmtRs_(Math.max(L.yearBalance, 0)) + '.';
   var silence = K.C.unanswered > 0 ? 'Since ' + fmtDate_(K.from) + ' I have called ' + plural_(K.C.unanswered, 'time') + ' without an answer.'
     : K.waUnanswered ? 'My last ' + plural_(K.waUnanswered.mineAfter, 'message') + ' here since ' + fmtDate_(K.waUnanswered.hisLast) + ' have had no reply.' : '';

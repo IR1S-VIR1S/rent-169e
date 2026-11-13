@@ -297,10 +297,19 @@ function reminderInfo_(D, L, today) {
     return { month: nk, rent: nr.rent, due: nd, balanceBefore: 0, status: 'due', days: dayNum_(nd) - dayNum_(today), unpaid: nr.rent };
   }
   if (thisMonth) bal -= thisMonth.rent;
-  var late = !!thisMonth && today > due;
+  var old = oldestUnpaid_(L), since = old && old.due < due ? old : null;
+  var late = !!since || (!!thisMonth && today > due);
   return { month: mk, rent: r.rent, due: due, balanceBefore: bal, status: late ? 'overdue' : 'due',
-    days: late ? dayNum_(today) - dayNum_(due) : dayNum_(due) - dayNum_(today),
+    days: late ? dayNum_(today) - dayNum_(since ? since.due : due) : dayNum_(due) - dayNum_(today),
+    monthDays: thisMonth && today > due ? dayNum_(today) - dayNum_(due) : 0, since: since ? since.month : '', sinceDue: since ? since.due : '',
     unpaid: thisMonth ? Math.min(r.rent, Math.max(L.yearBalance, 0)) : r.rent };
+}
+// The oldest month of this year not fully paid: what was paid for the year (and anything credited) clears the months in order.
+function oldestUnpaid_(L) {
+  if (!(L.yearBalance > 0)) return null;
+  var ms = L.months.filter(function (m) { return m.year === L.year; }), covered = L.cur.rent - L.yearBalance, cum = 0;
+  for (var i = 0; i < ms.length; i++) { cum += ms[i].rent; if (cum > covered) return ms[i]; }
+  return null;
 }
 function dueText_(R) { return (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.due.slice(5, 7) - 1]; }
 function daysText_(n) { return n + (n === 1 ? ' day' : ' days'); }
@@ -314,8 +323,10 @@ function reminderMessage_(D, L, today, opts) {
   var R = reminderInfo_(D, L, today);
   if (!R) return '';
   var b = R.status === 'overdue'
-    ? ['Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + ' and is now ' + daysText_(R.days) + ' overdue.' +
-        (R.unpaid < R.rent ? ' Still unpaid: ' + fmtRs_(R.unpaid) + '.' : ''), 'Kindly send it today.']
+    ? (R.since ? ['Rent has been unpaid since ' + monthName_(R.since) + ' (due ' + fmtDate_(R.sinceDue) + '): ' + daysText_(R.days) + ' overdue.',
+        'Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + (R.monthDays ? ' (' + daysText_(R.monthDays) + ' ago).' : '.'), 'Kindly send it today.']
+      : ['Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + ' and is now ' + daysText_(R.days) + ' overdue.' +
+        (R.unpaid < R.rent ? ' Still unpaid: ' + fmtRs_(R.unpaid) + '.' : ''), 'Kindly send it today.'])
     : ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' + dueText_(R) + '.' +
         (R.days === 0 ? ' That is today.' : '')];
   if (R.balanceBefore > 0) b.push('', 'Balance for ' + L.year + ' before this month: ' + fmtRs_(R.balanceBefore) + '.');
@@ -405,4 +416,4 @@ function contactCounts_(D, from, to) {
   return C;
 }
 
-var NEED_SCRIPT = '2.8';
+var NEED_SCRIPT = '2.9';

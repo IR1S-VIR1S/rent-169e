@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.8';
-var RELEASE_NOTE = '2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.9';
+var RELEASE_NOTE = '2.9: days overdue are counted from the due date of the oldest month of the year not yet fully paid (payments clear the oldest months first), so a small payment cannot reset them. Before that, 2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -308,10 +308,19 @@ function reminderInfo_(D, L, today) {
     return { month: nk, rent: nr.rent, due: nd, balanceBefore: 0, status: 'due', days: dayNum_(nd) - dayNum_(today), unpaid: nr.rent };
   }
   if (thisMonth) bal -= thisMonth.rent;
-  var late = !!thisMonth && today > due;
+  var old = oldestUnpaid_(L), since = old && old.due < due ? old : null;
+  var late = !!since || (!!thisMonth && today > due);
   return { month: mk, rent: r.rent, due: due, balanceBefore: bal, status: late ? 'overdue' : 'due',
-    days: late ? dayNum_(today) - dayNum_(due) : dayNum_(due) - dayNum_(today),
+    days: late ? dayNum_(today) - dayNum_(since ? since.due : due) : dayNum_(due) - dayNum_(today),
+    monthDays: thisMonth && today > due ? dayNum_(today) - dayNum_(due) : 0, since: since ? since.month : '', sinceDue: since ? since.due : '',
     unpaid: thisMonth ? Math.min(r.rent, Math.max(L.yearBalance, 0)) : r.rent };
+}
+// The oldest month of this year not fully paid: what was paid for the year (and anything credited) clears the months in order.
+function oldestUnpaid_(L) {
+  if (!(L.yearBalance > 0)) return null;
+  var ms = L.months.filter(function (m) { return m.year === L.year; }), covered = L.cur.rent - L.yearBalance, cum = 0;
+  for (var i = 0; i < ms.length; i++) { cum += ms[i].rent; if (cum > covered) return ms[i]; }
+  return null;
 }
 function dueText_(R) { return (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.due.slice(5, 7) - 1]; }
 function daysText_(n) { return n + (n === 1 ? ' day' : ' days'); }
@@ -325,8 +334,10 @@ function reminderMessage_(D, L, today, opts) {
   var R = reminderInfo_(D, L, today);
   if (!R) return '';
   var b = R.status === 'overdue'
-    ? ['Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + ' and is now ' + daysText_(R.days) + ' overdue.' +
-        (R.unpaid < R.rent ? ' Still unpaid: ' + fmtRs_(R.unpaid) + '.' : ''), 'Kindly send it today.']
+    ? (R.since ? ['Rent has been unpaid since ' + monthName_(R.since) + ' (due ' + fmtDate_(R.sinceDue) + '): ' + daysText_(R.days) + ' overdue.',
+        'Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + (R.monthDays ? ' (' + daysText_(R.monthDays) + ' ago).' : '.'), 'Kindly send it today.']
+      : ['Rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' was due by ' + dueText_(R) + ' and is now ' + daysText_(R.days) + ' overdue.' +
+        (R.unpaid < R.rent ? ' Still unpaid: ' + fmtRs_(R.unpaid) + '.' : ''), 'Kindly send it today.'])
     : ['A reminder that rent of ' + fmtRs_(R.rent) + ' for ' + monthName_(R.month) + ' is due by ' + dueText_(R) + '.' +
         (R.days === 0 ? ' That is today.' : '')];
   if (R.balanceBefore > 0) b.push('', 'Balance for ' + L.year + ' before this month: ' + fmtRs_(R.balanceBefore) + '.');
