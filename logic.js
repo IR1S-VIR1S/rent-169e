@@ -356,12 +356,45 @@ function logSummary_(D, from, to) {
   return { from: from, to: to, count: count, visits: visits.length, flags: count.flag || 0,
     totalWait: waits.reduce(function (s, x) { return s + x; }, 0), items: items };
 }
-// Contact counts for a period: used by the balance picture and by the follow-up messages.
+// Numbers in a WhatsApp chat log line, e.g. "He sent 1, you sent 4. You tried 3 times (7 calls, 2 tries not answered, talked 1 min). He tried once (1 call)."
+// A try is a run of calls less than an hour apart; the counts below are tries, not single calls.
+function chatNums_(notes) {
+  var t = String(notes || ''), r = { mine: 0, his: 0, i: 0, iNo: 0, he: 0, heNo: 0 }, m;
+  if ((m = /He sent (\d+), you sent (\d+)/.exec(t))) { r.his = +m[1]; r.mine = +m[2]; }
+  [['You', 'i', 'iNo'], ['He', 'he', 'heNo']].forEach(function (w) {
+    var x = new RegExp(w[0] + ' tried (once|(\\d+) times)(?: \\(([^)]*)\\))?').exec(t);
+    if (!x) return;
+    var n = x[1] === 'once' ? 1 : +x[2], inside = x[3] || '', k;
+    r[w[1]] = n;
+    if (/none answered|^\d+ calls?, not answered/.test(inside)) r[w[2]] = n;
+    else if ((k = /(\d+) tr(y|ies) not answered/.exec(inside))) r[w[2]] = +k[1];
+  });
+  return r;
+}
+// Contact counts for a period: used by the pictures and by the follow-up messages.
+// Entries made by hand and the imported WhatsApp chat can describe the same call, so each day takes the larger of the two.
 function contactCounts_(D, from, to) {
-  var S = logSummary_(D, from, to), c = S.count, noReply = 0;
-  (D.logs || []).forEach(function (g) { if (g.date >= from && g.date <= to && g.kind === 'flag' && g.flag === 'No answer / no reply') noReply++; });
-  return { calls: (c.call || 0) + (c.no_answer || 0), unanswered: (c.no_answer || 0) + noReply, messages: c.message || 0,
-    callbackReq: c.callback_req || 0, calledBack: c.called_back || 0, visits: S.visits, flags: S.flags };
+  var S = logSummary_(D, from, to), day = {};
+  function d(k) { return day[k] || (day[k] = { calls: 0, no: 0, msg: 0, he: 0, wCalls: 0, wNo: 0, wMsg: 0, wHe: 0, his: 0, cb: 0, noReply: 0 }); }
+  (D.logs || []).forEach(function (g) {
+    if (g.date < from || g.date > to) return;
+    var x = d(g.date);
+    if (g.kind === 'call') x.calls++;
+    if (g.kind === 'no_answer') { x.calls++; x.no++; }
+    if (g.kind === 'message') x.msg++;
+    if (g.kind === 'called_back') x.he++;
+    if (g.kind === 'callback_req') x.cb++;
+    if (g.kind === 'flag' && g.flag === 'No answer / no reply') x.noReply++;
+    if (g.kind === 'wa_chat') { var n = chatNums_(g.notes); x.wCalls += n.i; x.wNo += n.iNo; x.wMsg += n.mine; x.wHe += n.he; x.his += n.his; }
+  });
+  var C = { calls: 0, unanswered: 0, messages: 0, hisMessages: 0, callbackReq: 0, calledBack: 0, visits: S.visits, flags: S.flags };
+  Object.keys(day).forEach(function (k) {
+    var x = day[k];
+    C.calls += Math.max(x.calls, x.wCalls); C.unanswered += Math.max(x.no, x.wNo) + x.noReply;
+    C.messages += Math.max(x.msg, x.wMsg); C.calledBack += Math.max(x.he, x.wHe);
+    C.hisMessages += x.his; C.callbackReq += x.cb;
+  });
+  return C;
 }
 
-var NEED_SCRIPT = '2.5';
+var NEED_SCRIPT = '2.6';

@@ -143,7 +143,7 @@ function amount_(g, s, x, y, maxW) {
 function contactBlock_(g, y, D, L) {
   var C = contactCounts_(D, L.year + '-01-01', L.today), x = DRAW.X, w = DRAW.W - 2 * x;
   var tiles = [['Calls made', C.calls], ['Not answered', C.unanswered], ['Messages sent', C.messages],
-    ['Asked to call back', C.callbackReq], ['He called back', C.calledBack], ['Visits to EME', C.visits]];
+    ['Asked to call back', C.callbackReq], ['He called', C.calledBack], ['Visits to EME', C.visits]];
   if (!tiles.some(function (t) { return t[1] > 0; })) return y;
   y += 10; txt_(g, 'Contact in ' + L.year, x, y + 20, 36, 800); y += 44;
   var tw = (w - 5 * 12) / 6;
@@ -232,14 +232,15 @@ function kindLabel_(k) {
 function drawLogSummary(v, from, to, title) {
   var D = v.D, S = logSummary_(D, from, to), o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
   var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Contact Log', title + ': ' + fmtDate_(from) + ' to ' + fmtDate_(to));
-  var tiles = [['Calls made', S.count.call], ['Messages', S.count.message], ['Asked to call back', S.count.callback_req],
-    ['He called back', S.count.called_back], ['Visits to EME', S.visits], ['Red flags', S.flags]];
-  var tw = (w - 2 * 14) / 3;
+  var C = contactCounts_(D, from, to);
+  var tiles = [['Calls made', C.calls], ['Not answered', C.unanswered], ['Messages sent', C.messages], ['His replies', C.hisMessages],
+    ['Asked to call back', C.callbackReq], ['He called', C.calledBack], ['Visits to EME', S.visits], ['Red flags', S.flags]];
+  var tw = (w - 3 * 14) / 4;
   tiles.forEach(function (t, i) {
-    var tx = x + (i % 3) * (tw + 14), ty = y + Math.floor(i / 3) * 150, flag = i === 5 && t[1] > 0;
+    var tx = x + (i % 4) * (tw + 14), ty = y + Math.floor(i / 4) * 150, flag = i === 7 && t[1] > 0;
     box_(g, tx, ty, tw, 136, flag ? DRAW.red : '#F8FAFC', flag ? null : DRAW.line);
-    txt_(g, String(t[1] || 0), tx + 26, ty + 70, 56, 800, flag ? '#FFFFFF' : DRAW.navy);
-    txt_(g, t[0], tx + 26, ty + 112, 26, 600, flag ? '#FFFFFF' : DRAW.grey);
+    txt_(g, String(t[1] || 0), tx + 22, ty + 70, 56, 800, flag ? '#FFFFFF' : DRAW.navy);
+    txt_(g, fit_(g, t[0], tw - 34, 24, 600), tx + 22, ty + 112, 24, 600, flag ? '#FFFFFF' : DRAW.grey);
   });
   y += 330;
   if (S.visits) { txt_(g, 'Time spent waiting at EME: ' + fmtMins_(S.totalWait), x, y, 32, 700, DRAW.ink); y += 50; }

@@ -245,11 +245,22 @@ function guessTenant(names, tenant) {
 }
 function chatHash_(s) { var h = 5381; for (var i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36); }
 // One log line per day: who wrote how much, the calls each way (not answered, minutes talked), and up to three of his own messages (shortened), those about paying first.
+var CHAT_VER = 2; // raise when the reader changes, so the next import rewrites every day already imported
 var CHAT_SYS = /^(you )?pinned a message$|^(you deleted this message|this message was deleted)\.?$|end-to-end encrypted|^null$/i;
 function chatSecs_(t) {
   var m = /(\d+)\s*(hr|hour|min|sec)/gi, x, s = 0;
   while ((x = m.exec(t))) s += +x[1] * (/^h/i.test(x[2]) ? 3600 : /^m/i.test(x[2]) ? 60 : 1);
   return s;
+}
+// Calls less than an hour apart (by the same caller) count as one try; a try is answered if any call in it was.
+function chatTries_(list) {
+  var tries = [];
+  list.forEach(function (c) {
+    var t = tries[tries.length - 1];
+    if (t && c.at - t.last <= 60) { t.calls++; t.last = c.at; t.ans = t.ans || c.ans; t.sec += c.sec; }
+    else tries.push({ calls: 1, last: c.at, ans: c.ans, sec: c.sec });
+  });
+  return tries;
 }
 function chatDays(msgs, him, from, to) {
   var days = {};
@@ -257,26 +268,25 @@ function chatDays(msgs, him, from, to) {
     if (m.date < from || m.date > to) return;
     var t = m.text, isHim = m.who === him;
     if (CHAT_SYS.test(t)) return;
-    var d = days[m.date] || (days[m.date] = { date: m.date, time: m.time, his: 0, mine: 0, iCall: 0, iNo: 0, iSec: 0, heCall: 0, heNo: 0, heSec: 0, said: [], other: [] });
-    if (/^missed (voice|video) call\b/i.test(t) && t.length < 60) { if (isHim) { d.heCall++; d.heNo++; } else { d.iCall++; d.iNo++; } return; }
-    if (/^(voice|video) call\b/i.test(t) && t.length < 60) {
-      var no = /no answer|declined|missed|cancel/i.test(t), sec = no ? 0 : chatSecs_(t);
-      if (isHim) { d.heCall++; if (no) d.heNo++; d.heSec += sec; } else { d.iCall++; if (no) d.iNo++; d.iSec += sec; }
-      return;
-    }
+    var d = days[m.date] || (days[m.date] = { date: m.date, time: m.time, his: 0, mine: 0, iC: [], heC: [], said: [], other: [] });
+    var at = (+m.time.slice(0, 2)) * 60 + (+m.time.slice(3, 5)), call = null;
+    if (/^missed (voice|video) call\b/i.test(t) && t.length < 60) call = { at: at, ans: false, sec: 0 };
+    else if (/^(voice|video) call\b/i.test(t) && t.length < 60) { var no = /no answer|declined|missed|cancel/i.test(t); call = { at: at, ans: !no, sec: no ? 0 : chatSecs_(t) }; }
+    if (call) { (isHim ? d.heC : d.iC).push(call); return; }
     if (isHim) { d.his++; if (!/omitted>?$|^<attached/i.test(t) && t) (CHAT_PROMISE.test(t) ? d.said : d.other).push(t.replace(/\s+/g, ' ').slice(0, 140)); } else d.mine++;
   });
-  function calls(who, n, no, sec) {
-    if (!n) return '';
-    var x = [];
-    if (no) x.push(no === n ? (n === 1 ? 'not answered' : 'none answered') : no + ' not answered');
+  function calls(who, list) {
+    if (!list.length) return '';
+    var tries = chatTries_(list), n = tries.length, no = tries.filter(function (x) { return !x.ans; }).length;
+    var sec = tries.reduce(function (s, x) { return s + x.sec; }, 0), x = [plural_(list.length, 'call')];
+    if (no) x.push(no === n ? (n === 1 ? 'not answered' : 'none answered') : plural_(no, 'try') .replace('trys', 'tries') + ' not answered');
     if (sec) x.push('talked ' + (sec < 60 ? sec + ' sec' : Math.round(sec / 60) + ' min'));
-    return who + ' called ' + (n === 1 ? 'once' : n + ' times') + (x.length ? ' (' + x.join(', ') + ')' : '');
+    return who + ' tried ' + (n === 1 ? 'once' : n + ' times') + ' (' + x.join(', ') + ')';
   }
   return Object.keys(days).sort().map(function (k) {
     var d = days[k], bits = [];
     if (d.his || d.mine) bits.push('He sent ' + d.his + ', you sent ' + d.mine);
-    bits.push(calls('You', d.iCall, d.iNo, d.iSec), calls('He', d.heCall, d.heNo, d.heSec));
+    bits.push(calls('You', d.iC), calls('He', d.heC));
     bits = bits.filter(Boolean);
     d.said = d.said.concat(d.other).slice(0, 3); // what he said about paying first, then his other words
     var notes = (bits.join('. ') + '.' + (d.said.length ? ' He said: ' + d.said.map(function (x) { return '"' + x + '"'; }).join(' | ') : '')).slice(0, 1000);
@@ -287,11 +297,12 @@ function chatStale() {
   var wa = T.S.settings.wa;
   if (!wa || !wa.at) return { never: true, days: 0 };
   var n = dayNum_(todayPk()) - dayNum_(wa.at);
-  return { never: false, days: n, due: n >= 7 };
+  return { never: false, days: n, due: n >= 7 || wa.ver !== CHAT_VER, redo: wa.ver !== CHAT_VER };
 }
 function applyChat(parsed, him) {
   var S = T.S, v = view(), today = v.today, wa = S.settings.wa;
-  var from = wa && wa.at ? addDaysYmd_(wa.at, -1) : addDaysYmd_(today, -60);
+  var from = wa && wa.at && wa.ver === CHAT_VER ? addDaysYmd_(wa.at, -1) : addDaysYmd_(today, -60);
+  if (!wa || wa.ver !== CHAT_VER) v.D.logs.forEach(function (g) { if (g.kind === 'wa_chat' && g.date < from) from = g.date; }); // improved reader: read every imported day again
   S.outbox.forEach(function (o) { if (o.op === 'log' && o.kind === 'wa_chat' && o.date < from) from = o.date; }); // days not yet in the sheet are read again
   var rows = chatDays(parsed.msgs, him, from, today), added = 0, changed = 0, jobs = [];
   rows.forEach(function (r) {
@@ -306,7 +317,7 @@ function applyChat(parsed, him) {
   });
   var hisAll = parsed.msgs.filter(function (m) { return m.who === him; }), hisLast = hisAll.length ? hisAll[hisAll.length - 1] : null;
   var mineAfter = parsed.msgs.filter(function (m) { return m.who !== him && (!hisLast || (m.date + m.time) > (hisLast.date + hisLast.time)); }).length;
-  S.settings.wa = { at: today, him: him, hisLast: hisLast ? hisLast.date : '', mineAfter: hisLast ? mineAfter : 0,
+  S.settings.wa = { ver: CHAT_VER, at: today, him: him, hisLast: hisLast ? hisLast.date : '', mineAfter: hisLast ? mineAfter : 0,
     last: parsed.msgs.length ? parsed.msgs[parsed.msgs.length - 1].date : '' };
   S.outbox = S.outbox.concat(jobs);
   return saveState().then(function () { return { added: added, changed: changed, total: parsed.msgs.length, from: from }; });
@@ -351,5 +362,5 @@ function chatCard() {
   if (!st.never && !st.due) return null;
   return el('button', { class: 'card flagcard chatcard', type: 'button', id: 'chatcard', onclick: openChatImport }, svg('wa'),
     el('div', null, el('b', { text: st.never ? 'Import his WhatsApp chat' : 'Refresh his WhatsApp chat' }),
-      el('div', { class: 'sm', text: st.never ? 'Adds his replies, missed calls and promises to the log' : 'Last imported ' + daysText_(st.days) + ' ago. Weekly keeps the messages accurate.' })));
+      el('div', { class: 'sm', text: st.never ? 'Adds his replies, missed calls and promises to the log' : st.redo ? 'The chat reader was improved. Import the same chat again to correct the earlier days.' : 'Last imported ' + daysText_(st.days) + ' ago. Weekly keeps the messages accurate.' })));
 }
