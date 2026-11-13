@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '862946a1';
+var BUILD_ID = 'db2aaf8e';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -294,7 +294,7 @@ function renderTop() {
   var s = document.getElementById('syncpill');
   if (s && T.S) s.replaceWith(syncPill());
 }
-function go(screen) { T.screen = screen; T.sheet = null; render(); window.scrollTo(0, 0); if (screen === 'settings' && T.S && T.S.data) sync(true); }
+function go(screen) { T.screen = screen; T.sheet = null; render(); window.scrollTo(0, 0); setTimeout(applyUpdate, 300); if (screen === 'settings' && T.S && T.S.data) sync(true); }
 function barEl() {
   return el('nav', { class: 'bar' }, BAR.map(function (b) {
     var n = b[0] === 'settings' && T.S.outbox.some(function (o) { return o.error; }) ? el('span', { class: 'dot' }) : null;
@@ -1084,10 +1084,10 @@ function bioCard() {
 function updateApp() {
   if (!('serviceWorker' in navigator)) return toast('Updates need the Home Screen app.');
   navigator.serviceWorker.getRegistration().then(function (reg) {
-    if (reg && reg.waiting) { reg.waiting.postMessage('skip'); return; }
+    if (reg && reg.waiting) { UPD.waiting = reg.waiting; applyUpdate(true); return; }
     return fetch('sw.js', { cache: 'no-store' }).then(function (r) { return r.text(); }).then(function (t) {
       if (t.indexOf(BUILD_ID) >= 0) toast('Already the newest version.');
-      else if (reg) reg.update().then(function () { toast('Downloading the new version. Close and reopen the app.'); });
+      else if (reg) reg.update().then(function () { toast('Downloading the new version. It opens by itself in a moment.'); });
     });
   }).catch(function () { toast('Could not check for updates.'); });
 }
@@ -1102,19 +1102,93 @@ setInterval(function () {
 }, 15000);
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
+    checkUpdate();
     if (T.key && Date.now() - T.idleAt > IDLE_MS) lock();
     else if (T.S) { sync(true); if (T.S.pendingCall && !T.sheet) setTimeout(function () { if (T.S && !T.sheet) softRender(); }, 600); }
   }
 });
 window.addEventListener('online', function () { if (T.S) sync(true); });
 window.addEventListener('offline', function () { if (T.S) renderTop(); });
+// ---------- the app updates itself, without closing it ----------
+// A new version downloads in the background. At the next quiet moment (no form, no pop-up, not typing, not syncing)
+// the page reloads into it and stays unlocked: the key (which cannot be read out) is handed over through the phone's
+// own database for a few seconds and deleted as soon as it is picked up.
+var HAND_DB = 'r169.hand', HAND_MS = 20000;
+function handDb() {
+  return new Promise(function (ok, no) {
+    var q = indexedDB.open(HAND_DB, 1);
+    q.onupgradeneeded = function () { q.result.createObjectStore('k'); };
+    q.onsuccess = function () { ok(q.result); }; q.onerror = function () { no(q.error); };
+  });
+}
+function handPut(v) {
+  return handDb().then(function (db) { return new Promise(function (ok, no) { var t = db.transaction('k', 'readwrite'); t.objectStore('k').put(v, 'h'); t.oncomplete = function () { db.close(); ok(); }; t.onerror = function () { no(t.error); }; }); });
+}
+function handTake() {
+  return handDb().then(function (db) {
+    return new Promise(function (ok) {
+      var t = db.transaction('k', 'readwrite'), st = t.objectStore('k'), q = st.get('h'), v = null;
+      q.onsuccess = function () { v = q.result || null; st.delete('h'); };
+      t.oncomplete = function () { db.close(); ok(v); }; t.onerror = function () { ok(null); };
+    });
+  }).catch(function () { return null; });
+}
+function stashSession() {
+  if (!T.key || !T.S) return Promise.resolve();
+  var scr = ['home', 'pays', 'log', 'settings'].indexOf(T.screen) >= 0 ? T.screen : 'home';
+  return saveState().then(function () { return handPut({ key: T.key, at: Date.now(), screen: scr, idleAt: T.idleAt }); }).catch(function () { });
+}
+function resumeSession() {
+  return handTake().then(function (h) {
+    var st = stored();
+    if (!h || !h.key || Date.now() - h.at > HAND_MS || !st || !st.ct) return false;
+    return crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(st.iv) }, h.key, unb64(st.ct)).then(function (pt) {
+      T.key = h.key; T.S = JSON.parse(new TextDecoder().decode(pt));
+      T.S.uploads = T.S.uploads || []; T.S.settings = T.S.settings || { eurRate: 310.7 };
+      T.idleAt = h.idleAt || Date.now(); T.screen = T.S.data ? h.screen : 'home';
+      return true;
+    }).catch(function () { return false; });
+  });
+}
+function quiet() {
+  var a = document.activeElement;
+  return !T.form && !T.sheet && !T.syncing && !T.msg && !T.img && !(T.S && T.S.pendingCall) && !(a && a.matches && a.matches('input,textarea,select'));
+}
+var UPD = { waiting: null, had: false, going: false, checked: 0 };
+function applyUpdate(force) {
+  if (!UPD.waiting || UPD.going || (!force && T.key && !quiet())) return;
+  UPD.going = true;
+  stashSession().then(function () { UPD.waiting.postMessage('skip'); });
+  setTimeout(function () { UPD.going = false; }, 8000);
+}
+function watchReg(reg) {
+  function ready(w) { if (w && w.state === 'installed' && navigator.serviceWorker.controller) { UPD.waiting = w; applyUpdate(); } }
+  ready(reg.waiting);
+  reg.addEventListener('updatefound', function () {
+    var w = reg.installing; if (!w) return;
+    w.addEventListener('statechange', function () { ready(w); });
+  });
+}
+function checkUpdate() {
+  if (!('serviceWorker' in navigator) || !navigator.onLine || Date.now() - UPD.checked < 60000) return;
+  UPD.checked = Date.now();
+  navigator.serviceWorker.getRegistration().then(function (reg) { if (reg) return reg.update(); }).catch(function () { });
+}
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(function () { });
-  navigator.serviceWorker.addEventListener('controllerchange', function () { if (!T.key || T.screen === 'unlock') location.reload(); });
+  UPD.had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then(watchReg).catch(function () { });
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!UPD.had) { UPD.had = true; return; } // first install: nothing to reload
+    (UPD.going ? Promise.resolve() : stashSession()).then(function () { location.reload(); });
+  });
+  setInterval(function () { if (document.visibilityState === 'visible') { checkUpdate(); applyUpdate(); } }, 20000);
 }
 (function boot() {
   var st = stored();
   T.screen = st && st.ct ? 'unlock' : 'join';
   if (st && !st.ct) localStorage.removeItem(STORE);
-  render();
+  resumeSession().then(function (ok) {
+    render();
+    if (ok) { toast('App updated.'); sync(true); }
+  });
 })();
