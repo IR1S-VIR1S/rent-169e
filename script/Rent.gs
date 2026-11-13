@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.3';
-var RELEASE_NOTE = '2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.4';
+var RELEASE_NOTE = '2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -19,9 +19,11 @@ var CFG = {
   LOG_KINDS: [
     { k: 'message', label: 'Message sent' },
     { k: 'call', label: 'Called him' },
+    { k: 'no_answer', label: 'Call not answered' },
     { k: 'callback_req', label: 'Asked for call back' },
     { k: 'called_back', label: 'He called back' },
     { k: 'meeting', label: 'Meeting' },
+    { k: 'wa_chat', label: 'WhatsApp chat' },
     { k: 'flag', label: 'Red flag' }
   ],
   FLAGS: ['Sehrish called his wife', 'Missed a promised date', 'No answer / no reply', 'Rude or threatening'],
@@ -306,7 +308,7 @@ function dueText_(R) { return (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.due.slice(
 function daysText_(n) { return n + (n === 1 ? ' day' : ' days'); }
 // One line for the bottom of the picture, matching the date it is sent.
 function reminderLine_(R) {
-  if (R.status === 'overdue') return 'Now ' + daysText_(R.days) + ' overdue. Kindly send it today.';
+  if (R.status === 'overdue') return 'Kindly send it today. Thank you.';
   if (R.days === 0) return 'Due today. Kindly send it today. Thank you.';
   return 'Kindly send by the ' + ordinal_(+R.due.slice(8)) + '. Thank you.';
 }
@@ -364,6 +366,13 @@ function logSummary_(D, from, to) {
     .sort(function (a, b) { return (b.date + b.time) < (a.date + a.time) ? -1 : (b.date + b.time) > (a.date + a.time) ? 1 : 0; });
   return { from: from, to: to, count: count, visits: visits.length, flags: count.flag || 0,
     totalWait: waits.reduce(function (s, x) { return s + x; }, 0), items: items };
+}
+// Contact counts for a period: used by the balance picture and by the follow-up messages.
+function contactCounts_(D, from, to) {
+  var S = logSummary_(D, from, to), c = S.count, noReply = 0;
+  (D.logs || []).forEach(function (g) { if (g.date >= from && g.date <= to && g.kind === 'flag' && g.flag === 'No answer / no reply') noReply++; });
+  return { calls: (c.call || 0) + (c.no_answer || 0), unanswered: (c.no_answer || 0) + noReply, messages: c.message || 0,
+    callbackReq: c.callback_req || 0, calledBack: c.called_back || 0, visits: S.visits, flags: S.flags };
 }
 //== SHARED END
 

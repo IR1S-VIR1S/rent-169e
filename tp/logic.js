@@ -8,9 +8,11 @@ var CFG = {
   LOG_KINDS: [
     { k: 'message', label: 'Message sent' },
     { k: 'call', label: 'Called him' },
+    { k: 'no_answer', label: 'Call not answered' },
     { k: 'callback_req', label: 'Asked for call back' },
     { k: 'called_back', label: 'He called back' },
     { k: 'meeting', label: 'Meeting' },
+    { k: 'wa_chat', label: 'WhatsApp chat' },
     { k: 'flag', label: 'Red flag' }
   ],
   FLAGS: ['Sehrish called his wife', 'Missed a promised date', 'No answer / no reply', 'Rude or threatening'],
@@ -295,7 +297,7 @@ function dueText_(R) { return (+R.due.slice(8)) + ' ' + CFG.MONTHS[+R.due.slice(
 function daysText_(n) { return n + (n === 1 ? ' day' : ' days'); }
 // One line for the bottom of the picture, matching the date it is sent.
 function reminderLine_(R) {
-  if (R.status === 'overdue') return 'Now ' + daysText_(R.days) + ' overdue. Kindly send it today.';
+  if (R.status === 'overdue') return 'Kindly send it today. Thank you.';
   if (R.days === 0) return 'Due today. Kindly send it today. Thank you.';
   return 'Kindly send by the ' + ordinal_(+R.due.slice(8)) + '. Thank you.';
 }
@@ -354,4 +356,10 @@ function logSummary_(D, from, to) {
   return { from: from, to: to, count: count, visits: visits.length, flags: count.flag || 0,
     totalWait: waits.reduce(function (s, x) { return s + x; }, 0), items: items };
 }
-
+// Contact counts for a period: used by the balance picture and by the follow-up messages.
+function contactCounts_(D, from, to) {
+  var S = logSummary_(D, from, to), c = S.count, noReply = 0;
+  (D.logs || []).forEach(function (g) { if (g.date >= from && g.date <= to && g.kind === 'flag' && g.flag === 'No answer / no reply') noReply++; });
+  return { calls: (c.call || 0) + (c.no_answer || 0), unanswered: (c.no_answer || 0) + noReply, messages: c.message || 0,
+    callbackReq: c.callback_req || 0, calledBack: c.called_back || 0, visits: S.visits, flags: S.flags };
+}

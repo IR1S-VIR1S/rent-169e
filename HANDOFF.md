@@ -6,6 +6,7 @@
 
 | Version | App build | What changed | Tests |
 |---|---|---|---|
+| Script 2.4 | 4f4462f8 | Days overdue inside the OVERDUE stamp (reminder and balance pictures; amount shrinks to make room; the 'was due by' row and the days in the bottom line removed); balance picture gains Contact in the year under the months; follow-up messages in six approaches (nudge.js; cues from the ledger and log; facts typed once and kept on the phone only; sending logs 'Approach N'); Call on WhatsApp opens his chat, logs the call and asks the outcome on return (spoke with optional promised date, not answered, asked to call back, did not call); WhatsApp chat import from the exported zip or txt (read on the phone, one log line per day, re-import updates changed days) with a weekly refresh card on Home; new log kinds no_answer and wa_chat | phone 34/34 x3 (new harness, kept outside this repo) |
 | App only | 151f3d57 | Tenant page opens from his phone's last copy and refreshes in the background; first visit shows a moving loading screen with changing messages; GET and POST raced after 6 s; keeps his copy if the sheet is down; switched-off link wipes it | phone 91/91 x6 |
 | Script 2.3 | 34bcaa7a | Reminder follows the date: DUE before or on the 3rd, OVERDUE with days after it (picture, stamp, title and text); advance reminder for next month once this month is paid; bit.ly short link field for the tenant page | script 135/135, loader 22/22, phone 83/83 x6 |
 | App only | 73ea54db | Tenant link carries only the deployment id (about 227 to 148 characters); old long links keep working | phone 79/79 x6 |
@@ -16,4 +17,4 @@
 | Script 1.1 | 8727e14e | Pairing uses the pasted /exec address; logo | script 71/71, phone 37/37 |
 | Script 1.0 | 152fc8a4 | First version | script 66/66, phone 35/35 |
 
-Not verified on a real iPhone: Face ID (tested with a virtual authenticator), photo picking from Photos/camera, share sheet to WhatsApp, Arabic font in pictures (Geeza Pro expected).
+Not verified on a real iPhone: WhatsApp export layouts (parser written from the documented iOS and Android line formats, tested on made-up chats), opening the zip from Files, the call outcome sheet on return from WhatsApp; Face ID (tested with a virtual authenticator), photo picking from Photos/camera, share sheet to WhatsApp, Arabic font in pictures (Geeza Pro expected).

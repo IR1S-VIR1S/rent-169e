@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '151f3d57';
+var BUILD_ID = '4f4462f8';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -60,7 +60,7 @@ var ICONS = {
   link: 'M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7|M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7',
   update: 'M12 3v12|M7 10l5 5 5-5|M5 21h14'
 };
-var LOG_ICON = { message: 'msg', call: 'callout', callback_req: 'bell', called_back: 'callin', meeting: 'users', flag: 'flag', visit: 'car' };
+var LOG_ICON = { message: 'msg', call: 'callout', no_answer: 'x', wa_chat: 'wa', callback_req: 'bell', called_back: 'callin', meeting: 'users', flag: 'flag', visit: 'car' };
 function svg(name) {
   var ns = 'http://www.w3.org/2000/svg', s = document.createElementNS(ns, 'svg');
   s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true');
@@ -251,6 +251,7 @@ function render() {
   if (bar) document.body.appendChild(barEl());
   var fab = bar && FAB[T.screen] && FAB[T.screen]();
   if (fab) document.body.appendChild(el('button', { class: 'fab', id: 'fab', type: 'button', onclick: fab[2] }, svg(fab[0]), fab[1]));
+  if (bar && !T.sheet && typeof callDue === 'function' && callDue()) T.sheet = callSheet;
   if (T.sheet) document.body.appendChild(T.sheet());
 }
 var FAB = {
@@ -490,6 +491,7 @@ SCREENS.home = function () {
       el('div', { class: 'card stat' }, el('div', { class: 'lbl', text: 'Total outstanding' }), el('div', { class: 'val', id: 'total', text: fmtRs_(L.total) }))),
     lastFlag ? el('button', { class: 'card flagcard', type: 'button', onclick: function () { go('log'); } }, svg('flag'),
       el('div', null, el('b', { text: 'Red flag: ' + lastFlag.flag }), el('div', { class: 'sm', text: fmtDate_(lastFlag.date) + (lastFlag.time ? ' · ' + lastFlag.time : '') }))) : null,
+    chatCard(),
     el('div', { class: 'card' },
       el('div', { class: 'row' },
         el('div', null, el('b', { text: monthName_(mk) }), el('div', { class: 'sm', text: r ? fmtRs_(r.rent) + ' due by the ' + ordinal_(r.due_day) : '' })),
@@ -503,7 +505,9 @@ SCREENS.home = function () {
       tile('sand', 'msg', 'Balance update', 'Picture and text', function () { openImg('balance', null); }, 'b-balance'),
       tile('sand', 'bell', 'Rent reminder', 'Picture and text', function () { openImg('reminder'); }, 'b-remind'),
       tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
-      tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt')),
+      tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt'),
+      (function () { var K = nudgeCues(v); return tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge'); })(),
+      tile('sand', 'callout', 'Call on WhatsApp', T.S.pendingCall ? 'Outcome to fill in' : 'Logged automatically', startCall, 'b-call')),
     el('h2', { text: 'Latest payments' }),
     el('div', { class: 'card list' }, recent.length ? recent.map(payRow) : el('p', { class: 'muted', text: 'None yet.' })));
 };
@@ -714,7 +718,7 @@ SCREENS.logadd = function () {
   }
   return el('div', null, backBar('Log entry', 'log'),
     el('label', { class: 'f', text: 'What happened?' }),
-    el('div', { class: 'chips', id: 'chips-kind' }, CFG.LOG_KINDS.map(function (x) {
+    el('div', { class: 'chips', id: 'chips-kind' }, CFG.LOG_KINDS.filter(function (x) { return x.k !== 'wa_chat'; }).map(function (x) {
       return el('button', { type: 'button', 'data-v': x.k, class: (f.kind === x.k ? 'on' : '') + (x.k === 'flag' ? ' redchip' : ''), onclick: function (e) {
         f.kind = x.k; e.currentTarget.parentNode.querySelectorAll('button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-v') === x.k); }); drawFlags();
       } }, svg(LOG_ICON[x.k]), x.label);
@@ -782,9 +786,12 @@ SCREENS.log = function () {
   return el('div', null, topBar('Contact log'),
     visitCard(),
     el('h2', { text: 'Record' }),
-    el('div', { class: 'tiles six' }, CFG.LOG_KINDS.map(function (x) {
+    el('div', { class: 'tiles six' }, CFG.LOG_KINDS.filter(function (x) { return x.k !== 'wa_chat'; }).map(function (x) {
       return tile(x.k === 'flag' ? 'red' : 'white', LOG_ICON[x.k], x.label, '', function () { openLog(x.k); }, 'lk-' + x.k);
     })),
+    el('div', { class: 'actions2' },
+      btn('sand', 'callout', 'Call on WhatsApp', startCall, 'logcall'),
+      btn('sand', 'wa', 'Import WhatsApp chat', openChatImport, 'logimport')),
     btn('sand wide', 'image', 'Summary picture for WhatsApp', function () { openImg('log'); }, 'logsummary'),
     el('h2', { text: 'History' }),
     el('div', { class: 'card list', id: 'loglist' }, items.length ? items.map(logRow) : el('p', { class: 'muted', text: 'Nothing recorded yet.' })));
@@ -1067,7 +1074,7 @@ setInterval(function () {
 document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
     if (T.key && Date.now() - T.idleAt > IDLE_MS) lock();
-    else if (T.S) sync(true);
+    else if (T.S) { sync(true); if (T.S.pendingCall && !T.sheet) setTimeout(function () { if (T.S && !T.sheet) softRender(); }, 600); }
   }
 });
 window.addEventListener('online', function () { if (T.S) sync(true); });

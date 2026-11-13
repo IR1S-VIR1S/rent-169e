@@ -204,3 +204,7 @@ img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; 
 .spin{width:14px;height:14px;border:2px solid #9CA3AF;border-top-color:#0b2a5b;border-radius:50%;animation:spin .8s linear infinite;flex:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.progress span,.skel,.spin{animation:none}}
+
+.hidefile { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.chatcard { margin: 10px 0; }
+#chips-nudge button { text-align: left; }

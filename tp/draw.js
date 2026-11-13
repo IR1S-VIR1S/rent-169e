@@ -115,15 +115,46 @@ function gridBlock_(g, y, L, D) {
   return monthGrid_(g, y, L, D, true);
 }
 function eurTxt_(n) { var r = Number(DRAW.eurRate) || 0; return r > 0 ? '≈ €' + groupNum_(n / r) : ''; }
-function stamp_(g, cx, cy, text, color, size) {
+function stamp_(g, cx, cy, text, color, size, line2) {
   size = size || 76;
-  g.save(); g.translate(cx, cy); g.rotate(-0.26); g.globalAlpha = 0.82;
+  g.save(); g.translate(cx, cy); g.rotate(line2 ? -0.1 : -0.26); g.globalAlpha = line2 ? 0.95 : 0.82;
   g.lineWidth = 9; g.strokeStyle = color; g.font = '900 ' + size + 'px ' + DRAW.F;
-  var tw = g.measureText(text).width, bw = tw + 56, bh = Math.round(size * 1.47);
+  var tw = g.measureText(text).width, s2 = Math.round(size * 1.5), tw2 = 0;
+  if (line2) { g.font = '900 ' + s2 + 'px ' + DRAW.F; tw2 = g.measureText(line2).width; g.font = '900 ' + size + 'px ' + DRAW.F; }
+  var bw = Math.max(tw, tw2) + 56, bh = line2 ? size + s2 + 60 : Math.round(size * 1.47);
   box_(g, -bw / 2, -bh / 2, bw, bh, null, null, 20); g.lineWidth = 9; g.strokeStyle = color; g.stroke();
   g.lineWidth = 3; box_(g, -bw / 2 + 14, -bh / 2 + 14, bw - 28, bh - 28, null, null, 12); g.strokeStyle = color; g.stroke();
-  g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, 0, 6);
+  g.fillStyle = color; g.textAlign = 'center'; g.textBaseline = 'middle';
+  if (line2) {
+    g.fillText(text, 0, -bh / 2 + 26 + size / 2);
+    g.font = '900 ' + s2 + 'px ' + DRAW.F; g.fillText(line2, 0, bh / 2 - 24 - s2 / 2 + 4);
+  } else g.fillText(text, 0, 6);
   g.restore(); g.textBaseline = 'alphabetic';
+}
+// The OVERDUE stamp carries the number of days.
+function overdueStamp_(g, x, w, y, days) { stamp_(g, x + w - 180, y + 158, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase()); }
+// The big amount, made smaller only when the stamp needs the room beside it.
+function amount_(g, s, x, y, maxW) {
+  var size = 106; g.font = '800 ' + size + 'px ' + DRAW.F;
+  while (size > 60 && g.measureText(s).width > maxW) { size -= 4; g.font = '800 ' + size + 'px ' + DRAW.F; }
+  txt_(g, s, x, y, size, 800, '#FFFFFF');
+}
+// Contact this year, under the months received.
+function contactBlock_(g, y, D, L) {
+  var C = contactCounts_(D, L.year + '-01-01', L.today), x = DRAW.X, w = DRAW.W - 2 * x;
+  var tiles = [['Calls made', C.calls], ['Not answered', C.unanswered], ['Messages sent', C.messages],
+    ['Asked to call back', C.callbackReq], ['He called back', C.calledBack], ['Visits to EME', C.visits]];
+  if (!tiles.some(function (t) { return t[1] > 0; })) return y;
+  y += 10; txt_(g, 'Contact in ' + L.year, x, y + 20, 36, 800); y += 44;
+  var tw = (w - 5 * 12) / 6;
+  tiles.forEach(function (t, i) {
+    var tx = x + i * (tw + 12), bad = i === 1 && t[1] > 0;
+    box_(g, tx, y, tw, 112, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line, 16);
+    txt_(g, String(t[1] || 0), tx + tw / 2, y + 50, 42, 800, bad ? DRAW.red : DRAW.navy, 'center');
+    var words = t[0].split(' '), l1 = words.length > 2 ? words.slice(0, 2).join(' ') : words[0], l2 = words.slice(words.length > 2 ? 2 : 1).join(' ');
+    txt_(g, l1, tx + tw / 2, y + 78, 19, 600, DRAW.grey, 'center'); txt_(g, l2, tx + tw / 2, y + 100, 19, 600, DRAW.grey, 'center');
+  });
+  return y + 126;
 }
 
 // Payment receipt: same layout as the reminder, with a PAID stamp.
@@ -158,13 +189,16 @@ function drawBalance(v, pay, arrears) {
   var ch = 330 + (lines.length - 1) * 64 + 44;
   box_(g, x, y, w, ch, clear ? DRAW.green : DRAW.navy, null, 28);
   txt_(g, clear ? 'Rent for ' + L.year + ' is clear' : 'Remaining for ' + L.year, x + 40, y + 70, 36, 600, '#E5E7EB');
-  txt_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, 106, 800, '#FFFFFF');
+  var R = clear ? null : reminderInfo_(D, L, v.today), odb = !!R && R.status === 'overdue';
+  amount_(g, fmtRs_(Math.max(L.yearBalance, 0)), x + 40, y + 182, odb ? w - 80 - 320 : w - 80);
   if (!clear) txt_(g, eurTxt_(L.yearBalance), x + 40, y + 238, 34, 600, '#E0B65A');
   cardLines_(g, x, y + 330, w, lines);
+  if (odb) overdueStamp_(g, x, w, y, R.days);
   y += ch + 30;
   if (pay) y = row_(g, y, 'Thank you for ' + fmtRs_(pay.amount), 'received ' + fmtDate_(pay.date), '', '#F0FDF4', '#86EFAC', DRAW.green);
   if (arrears) y = arrearsRows_(g, y, L);
-  gridBlock_(g, y, L, D);
+  y = gridBlock_(g, y, L, D);
+  contactBlock_(g, y, D, L);
   footer_(g, rentLine_(D, v.today));
   return o.c;
 }
@@ -174,14 +208,14 @@ function drawReminder(v, arrears) {
   if (!R) return o.c;
   var y = header_(g, (D.property || '169-E, EME') + ' · Rent', R.status === 'overdue' ? 'Rent Overdue' : 'Rent Reminder', fmtDate_(v.today));
   y = greet_(g, y, D);
-  box_(g, x, y, w, 330 + 44, DRAW.navy, null, 28);
+  var od = R.status === 'overdue', bh = od ? 290 : 330 + 44;
+  box_(g, x, y, w, bh, DRAW.navy, null, 28);
   txt_(g, monthName_(R.month) + ' rent', x + 40, y + 70, 36, 600, '#E5E7EB');
-  txt_(g, fmtRs_(R.rent), x + 40, y + 182, 106, 800, '#FFFFFF');
+  amount_(g, fmtRs_(R.rent), x + 40, y + 182, od ? w - 80 - 320 : w - 80);
   txt_(g, eurTxt_(R.rent), x + 40, y + 238, 34, 600, '#E0B65A');
-  var od = R.status === 'overdue';
-  cardLines_(g, x, y + 330, w, [od ? ['Was due by', dueText_(R) + ' · ' + daysText_(R.days) + ' ago'] : ['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]);
-  if (od) stamp_(g, x + w - 165, y + 92, 'OVERDUE', '#FF7A7A', 46); else stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B');
-  y += 330 + 44 + 30;
+  if (od) overdueStamp_(g, x, w, y, R.days);
+  else { cardLines_(g, x, y + 330, w, [['Due by', dueText_(R) + ' ' + R.due.slice(0, 4) + (R.days === 0 ? ' (today)' : '')]]); stamp_(g, x + w - 150, y + 96, 'DUE', '#F59E0B'); }
+  y += bh + 30;
   if (R.balanceBefore > 0) y = row_(g, y, 'Balance for ' + L.year, 'before this month', groupNum_(R.balanceBefore), DRAW.rustBg, '#FDBA74', DRAW.rust);
   if (arrears) y = arrearsRows_(g, y, L);
   gridBlock_(g, y, L, D);
