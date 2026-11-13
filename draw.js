@@ -229,33 +229,124 @@ function kindLabel_(k) {
   return f ? f.label : k;
 }
 
+// What really happened day by day: entries made by hand and the imported chat can describe the same call, so each day takes the larger.
+function chatSide_(notes, who) {
+  var x = new RegExp(who + ' tried (?:once|\\d+ times): ([^.]*)').exec(String(notes || '')), r = { calls: 0, tries: 0, ans: 0, sec: 0 };
+  if (!x) return r;
+  x[1].split(';').forEach(function (p) {
+    var n = /(\d+) calls?/.exec(p), t = /\((\d+) (sec|min)\)/.exec(p);
+    r.tries++; r.calls += n ? +n[1] : 1;
+    if (!/not answered/.test(p)) r.ans++;
+    if (t) r.sec += +t[1] * (t[2] === 'min' ? 60 : 1);
+  });
+  return r;
+}
+function contactStory_(D, from, to) {
+  var day = {}, T = { calls: 0, tries: 0, ans: 0, sec: 0, mine: 0, his: 0, heCalls: 0, daysMe: 0, daysHe: 0, daysNone: 0, lastHeard: '', days: day };
+  function d(k) { return day[k] || (day[k] = { mCalls: 0, mAns: 0, mMsg: 0, mHe: 0, other: 0, c: { calls: 0, tries: 0, ans: 0, sec: 0 }, h: { calls: 0, ans: 0 }, cMsg: 0, his: 0 }); }
+  (D.logs || []).forEach(function (g) {
+    if (g.date < from || g.date > to) return;
+    var x = d(g.date);
+    if (g.kind === 'call') { x.mCalls++; x.mAns++; }
+    else if (g.kind === 'no_answer') x.mCalls++;
+    else if (g.kind === 'message') x.mMsg++;
+    else if (g.kind === 'called_back') x.mHe++;
+    else if (g.kind === 'wa_chat') { var n = chatNums_(g.notes); x.cMsg += n.mine; x.his += n.his; x.c = chatSide_(g.notes, 'You'); x.h = chatSide_(g.notes, 'He'); }
+    else if (g.kind !== 'flag') x.other++;
+  });
+  (D.visits || []).forEach(function (v) { if (v.date >= from && v.date <= to) d(v.date).other++; });
+  Object.keys(day).sort().forEach(function (k) {
+    var x = day[k], calls = Math.max(x.mCalls, x.c.calls), tries = Math.max(x.mCalls, x.c.tries), ans = Math.max(x.mAns, x.c.ans);
+    var msg = Math.max(x.mMsg, x.cMsg), he = Math.max(x.mHe, x.h.ans);
+    T.calls += calls; T.tries += tries; T.ans += Math.min(ans, tries); T.sec += x.c.sec; T.mine += msg; T.his += x.his; T.heCalls += he;
+    x.me = calls > 0 || msg > 0 || x.other > 0; x.he = x.his > 0 || he > 0 || ans > 0;
+    if (x.me) T.daysMe++;
+    if (x.he) { T.daysHe++; T.lastHeard = k; }
+    if (x.me && !x.he) T.daysNone++;
+  });
+  return T;
+}
+function wrap_(g, s, maxW, size, weight, maxLines) {
+  g.font = (weight || 400) + ' ' + size + 'px ' + DRAW.F;
+  var words = String(s).split(/\s+/), lines = [], cur = '';
+  words.forEach(function (wd) {
+    var t = cur ? cur + ' ' + wd : wd;
+    if (g.measureText(t).width <= maxW || !cur) cur = t; else { lines.push(cur); cur = wd; }
+  });
+  if (cur) lines.push(cur);
+  if (lines.length > maxLines) { lines = lines.slice(0, maxLines); lines[maxLines - 1] = fit_(g, lines[maxLines - 1] + ' …', maxW, size, weight); }
+  return lines.map(function (l) { return fit_(g, l, maxW, size, weight); });
+}
+function talk_(sec) { return !sec ? '0 min' : sec < 60 ? sec + ' sec' : Math.round(sec / 60) + ' min'; }
+
 function drawLogSummary(v, from, to, title) {
   var D = v.D, S = logSummary_(D, from, to), o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
   var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Contact Log', title + ': ' + fmtDate_(from) + ' to ' + fmtDate_(to));
-  var C = contactCounts_(D, from, to);
-  var tiles = [['Calls made', C.calls], ['Not answered', C.unanswered], ['Messages sent', C.messages], ['His replies', C.hisMessages],
-    ['Asked to call back', C.callbackReq], ['He called', C.calledBack], ['Visits to EME', S.visits], ['Red flags', S.flags]];
+  var C = contactCounts_(D, from, to), R = contactStory_(D, from, to);
+  // 1. who reached out: two bars on the same scale
+  var mine = R.mine + R.calls, his = R.his + R.heCalls, top = Math.max(mine, his, 1), bw = w - 48;
+  box_(g, x, y, w, 236, '#F8FAFC', DRAW.line);
+  [['You', mine, plural2_(R.mine, 'message') + ' · ' + plural2_(R.calls, 'call'), DRAW.navy],
+    ['He', his, plural2_(R.his, 'message') + ' · ' + plural2_(R.heCalls, 'call'), DRAW.gold]].forEach(function (r, i) {
+    var by = y + 24 + i * 104;
+    txt_(g, r[0] + ': ' + r[1], x + 24, by + 30, 32, 800, DRAW.ink);
+    txt_(g, r[2], x + w - 24, by + 30, 26, 600, DRAW.grey, 'right');
+    box_(g, x + 24, by + 46, bw, 34, '#E5E7EB', null, 17);
+    if (r[1] > 0) box_(g, x + 24, by + 46, Math.max(34, bw * r[1] / top), 34, r[3], null, 17);
+  });
+  y += 252;
+  // 2. the numbers
+  var tiles = [['Calls made', String(R.calls), 'in ' + plural2_(R.tries, 'try').replace('trys', 'tries')],
+    ['Tries answered', R.ans + ' of ' + R.tries, 'talked ' + talk_(R.sec), R.tries > 0 && R.ans < R.tries],
+    ['Days no response', R.daysNone + ' of ' + R.daysMe, 'days I reached out', R.daysNone > 0],
+    ['Last heard', R.lastHeard ? fmtDate_(R.lastHeard).replace(/ \d{4}$/, '') : 'Never', R.lastHeard ? (to === R.lastHeard ? 'today' : daysText_(dayNum_(to) - dayNum_(R.lastHeard)) + ' ago') : 'in this period']];
   var tw = (w - 3 * 14) / 4;
   tiles.forEach(function (t, i) {
-    var tx = x + (i % 4) * (tw + 14), ty = y + Math.floor(i / 4) * 150, flag = i === 7 && t[1] > 0;
-    box_(g, tx, ty, tw, 136, flag ? DRAW.red : '#F8FAFC', flag ? null : DRAW.line);
-    txt_(g, String(t[1] || 0), tx + 22, ty + 70, 56, 800, flag ? '#FFFFFF' : DRAW.navy);
-    txt_(g, fit_(g, t[0], tw - 34, 24, 600), tx + 22, ty + 112, 24, 600, flag ? '#FFFFFF' : DRAW.grey);
+    var tx = x + i * (tw + 14), bad = !!t[3];
+    box_(g, tx, y, tw, 168, bad ? '#FDECEA' : '#F8FAFC', bad ? '#F5B8B3' : DRAW.line);
+    g.font = '800 46px ' + DRAW.F; var big = g.measureText(t[1]).width > tw - 36 ? 34 : 46;
+    txt_(g, t[1], tx + 20, y + 62, big, 800, bad ? DRAW.red : DRAW.navy);
+    txt_(g, fit_(g, t[0], tw - 30, 23, 700), tx + 20, y + 104, 23, 700, DRAW.ink);
+    txt_(g, fit_(g, t[2], tw - 30, 21, 500), tx + 20, y + 136, 21, 500, DRAW.grey);
   });
-  y += 330;
-  if (S.visits) { txt_(g, 'Time spent waiting at EME: ' + fmtMins_(S.totalWait), x, y, 32, 700, DRAW.ink); y += 50; }
-  txt_(g, 'Latest', x, y + 20, 38, 800); y += 50;
-  var max = Math.floor((DRAW.H - 220 - y) / 104);
-  S.items.slice(0, max).forEach(function (it) {
-    var flag = it.kind === 'flag';
-    box_(g, x, y, w, 92, flag ? '#FDECEA' : null, flag ? '#F5B8B3' : DRAW.line, 16);
-    txt_(g, fmtDate_(it.date) + (it.time ? ' · ' + it.time : ''), x + 24, y + 38, 26, 600, DRAW.grey);
-    txt_(g, flag ? 'RED FLAG: ' + it.flag : kindLabel_(it.kind), x + w - 24, y + 38, 28, 800, flag ? DRAW.red : DRAW.navy, 'right');
-    txt_(g, fit_(g, it.notes || '·', w - 48, 28, 400), x + 24, y + 76, 28, 400, DRAW.ink);
-    y += 104;
+  y += 184;
+  var small = [['Asked to call back', C.callbackReq], ['Visits to EME', S.visits], ['Red flags', S.flags]].filter(function (t) { return t[1] > 0; });
+  if (S.visits) small.push(['Waiting at EME', fmtMins_(S.totalWait)]);
+  if (small.length) { txt_(g, small.map(function (t) { return t[0] + ': ' + t[1]; }).join('   ·   '), x, y + 26, 27, 700, S.flags ? DRAW.red : DRAW.ink); y += 52; }
+  // 3. day by day (up to 62 days)
+  var n = dayNum_(to) - dayNum_(from) + 1;
+  if (n <= 62) {
+    txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
+    var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per;
+    for (var i = 0; i < n; i++) {
+      var k = addDaysYmd_(from, i), q = R.days[k], cx = x + (i % per) * (cw + gap), cy = y + Math.floor(i / per) * 62;
+      box_(g, cx, cy, cw, 54, !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, 8);
+    }
+    y += Math.ceil(n / per) * 62 + 4;
+    txt_(g, fmtDate_(from).replace(/ \d{4}$/, ''), x, y + 20, 21, 600, DRAW.grey); txt_(g, fmtDate_(to).replace(/ \d{4}$/, ''), x + w, y + 20, 21, 600, DRAW.grey, 'right');
+    y += 34; var lx = x;
+    [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']].forEach(function (l) {
+      box_(g, lx, y + 2, 22, 22, l[0], null, 6); txt_(g, l[1], lx + 30, y + 20, 21, 600, DRAW.grey);
+      g.font = '600 21px ' + DRAW.F; lx += 30 + g.measureText(l[1]).width + 26;
+    });
+    y += 44;
+  }
+  // 4. latest entries, two lines each
+  txt_(g, 'Latest', x, y + 30, 34, 800); y += 46;
+  var max = 0;
+  S.items.some(function (it) {
+    var flag = it.kind === 'flag', lines = wrap_(g, it.notes && it.notes !== '.' ? it.notes : '·', w - 48, 26, 400, 2), h = 56 + lines.length * 34;
+    if (y + h > DRAW.H - 190) return true;
+    max++;
+    box_(g, x, y, w, h, flag ? '#FDECEA' : null, flag ? '#F5B8B3' : DRAW.line, 16);
+    txt_(g, fmtDate_(it.date) + (it.kind !== 'wa_chat' && it.time ? ' · ' + it.time : ''), x + 24, y + 36, 24, 600, DRAW.grey);
+    txt_(g, flag ? 'RED FLAG: ' + it.flag : kindLabel_(it.kind), x + w - 24, y + 36, 26, 800, flag ? DRAW.red : DRAW.navy, 'right');
+    lines.forEach(function (l, i) { txt_(g, l, x + 24, y + 72 + i * 34, 26, 400, DRAW.ink); });
+    y += h + 10;
   });
-  if (S.items.length > max) txt_(g, '+ ' + (S.items.length - max) + ' earlier entries', x, y + 24, 26, 600, DRAW.grey);
+  if (S.items.length > max) txt_(g, '+ ' + (S.items.length - max) + ' earlier entries', x, y + 22, 24, 600, DRAW.grey);
   if (!S.items.length) txt_(g, 'Nothing recorded in this period.', x, y + 30, 30, 400, DRAW.grey);
   footer_(g, '');
   return o.c;
 }
+function plural2_(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
