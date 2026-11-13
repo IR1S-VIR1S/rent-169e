@@ -178,11 +178,13 @@ function contactBlock_(g, y, v) {
   y += 130;
   // day by day: up to 62 squares a row
   var n = dayNum_(to) - dayNum_(from) + 1, rows = Math.ceil(n / 62), per = Math.ceil(n / rows), ch = rows === 1 ? 36 : 20, gap = rows === 1 ? 4 : 3, cw = (w - (per - 1) * gap) / per;
-  if (y + rows * (ch + gap) + 34 > end) return y;
+  if (y + rows * (ch + gap) + 34 + (payDay ? 24 : 0) > end) return y;
+  if (payDay) y += 24;
   for (var i = 0; i < n; i++) {
     var k = addDaysYmd_(from, i), q = R.days[k];
     box_(g, x + (i % per) * (cw + gap), y + Math.floor(i / per) * (ch + gap), cw, ch, k === payDay ? PAYC : !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red, null, rows === 1 ? 7 : 4);
   }
+  if (payDay) payTag_(g, x + cw / 2, y, payDay);
   y += rows * (ch + gap) + 6;
   var lx = x, items = [[DRAW.red, 'I contacted, no response'], [DRAW.green, 'He replied, answered or called'], ['#EEF0F3', 'No contact']];
   items.forEach(function (l) {
@@ -361,11 +363,14 @@ function drawLogSummary(v, from, to, title) {
   function dayCol(k) { var q = R.days[k]; if (k === payDay) return PAYC; return !q || (!q.me && !q.he) ? '#EEF0F3' : q.he ? DRAW.green : DRAW.red; }
   if (n <= 62) {
     txt_(g, 'Day by day', x, y + 30, 34, 800); y += 48;
-    var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per;
+    var per = n <= 31 ? n : Math.ceil(n / 2), gap = 4, cw = (w - (per - 1) * gap) / per, tag = null;
+    if (payDay >= from && payDay <= to) y += 26;
     for (var i = 0; i < n; i++) {
       var k = addDaysYmd_(from, i), cx = x + (i % per) * (cw + gap), cy = y + Math.floor(i / per) * 62;
       box_(g, cx, cy, cw, 54, dayCol(k), null, 8);
+      if (k === payDay) tag = [cx + cw / 2, cy];
     }
+    if (tag) payTag_(g, tag[0], tag[1], payDay);
     y += Math.ceil(n / per) * 62 + 4;
     txt_(g, fmtDate_(from).replace(/ \d{4}$/, ''), x, y + 20, 21, 600, DRAW.grey); txt_(g, fmtDate_(to).replace(/ \d{4}$/, ''), x + w, y + 20, 21, 600, DRAW.grey, 'right');
     y += 34;
@@ -374,7 +379,8 @@ function drawLogSummary(v, from, to, title) {
     var keys = Object.keys(R.days).sort(), first = n > 366 && keys.length && keys[0] > from ? keys[0] : from, months = [], ym = to.slice(0, 7);
     while (ym >= first.slice(0, 7) && months.length < 12) { months.unshift(ym); var yy = +ym.slice(0, 4), mm = +ym.slice(5, 7) - 1; if (mm < 1) { mm = 12; yy--; } ym = yy + '-' + pad2_(mm); }
     txt_(g, 'Day by day' + (months[0] > first.slice(0, 7) ? ' (last 12 months)' : ''), x, y + 30, 34, 800); y += 46;
-    var lab = 132, g2 = 3, mw = (w - lab - 30 * g2) / 31;
+    var lab = 132, g2 = 3, mw = (w - lab - 30 * g2) / 31, tag2 = null;
+    if (payDay >= from && payDay <= to) y += 26;
     months.forEach(function (m) {
       var yy = +m.slice(0, 4), mm = +m.slice(5, 7), dim = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
       txt_(g, CFG.MONTHS[mm - 1].slice(0, 3) + ' ' + yy, x, y + 20, 21, 700, DRAW.grey);
@@ -382,9 +388,11 @@ function drawLogSummary(v, from, to, title) {
         var k = m + '-' + pad2_(dd);
         if (k < from || k > to) continue;
         box_(g, x + lab + (dd - 1) * (mw + g2), y, mw, 24, dayCol(k), null, 5);
+        if (k === payDay) tag2 = [x + lab + (dd - 1) * (mw + g2) + mw / 2, y];
       }
       y += 30;
     });
+    if (tag2) payTag_(g, tag2[0], tag2[1], payDay);
     y += 2;
   }
   {
@@ -422,5 +430,12 @@ function drawLogSummary(v, from, to, title) {
   if (!S.items.length) txt_(g, 'Nothing recorded in this period.', x, y + 30, 30, 400, DRAW.grey);
   footer_(g, '');
   return o.c;
+}
+// Date pill above the blue last-payment square, kept inside the picture's margins.
+function payTag_(g, cx, top, ymd) {
+  var t = fmtDate_(ymd).replace(/ \d{4}$/, ''); g.font = '800 19px ' + DRAW.F;
+  var tw = g.measureText(t).width + 16, x0 = Math.min(Math.max(cx - tw / 2, DRAW.X), DRAW.W - DRAW.X - tw);
+  box_(g, x0, top - 28, tw, 24, '#FFFFFF', '#2563EB', 8);
+  txt_(g, t, x0 + tw / 2, top - 10, 19, 800, '#2563EB', 'center');
 }
 function plural2_(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
