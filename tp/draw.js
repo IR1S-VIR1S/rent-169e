@@ -33,11 +33,13 @@ function fit_(g, s, maxW, size, weight) {
 function header_(g, kicker, title, sub) {
   var x = DRAW.X, W = DRAW.W;
   if (LOGO.complete && LOGO.naturalWidth) {
-    g.save(); g.beginPath(); if (g.roundRect) g.roundRect(W - x - 150, 56, 150, 150, 30); else g.rect(W - x - 150, 56, 150, 150);
-    g.clip(); g.drawImage(LOGO, W - x - 150, 56, 150, 150); g.restore();
+    // logo spans the text block: top level with the capitals of the kicker, bottom level with the line under the title
+    var ls = 170, lt = 87;
+    g.save(); g.beginPath(); if (g.roundRect) g.roundRect(W - x - ls, lt, ls, ls, 34); else g.rect(W - x - ls, lt, ls, ls);
+    g.clip(); g.drawImage(LOGO, W - x - ls, lt, ls, ls); g.restore();
   }
   txt_(g, kicker.toUpperCase(), x, 110, 30, 700, DRAW.grey);
-  txt_(g, fit_(g, title, W - 2 * x - 180, 70, 800), x, 200, 70, 800);
+  txt_(g, fit_(g, title, W - 2 * x - 200, 70, 800), x, 200, 70, 800);
   txt_(g, sub, x, 256, 32, 400, DRAW.grey);
   return 300;
 }
