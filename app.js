@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '066bc7db';
+var BUILD_ID = '064c09a8';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -524,8 +524,8 @@ SCREENS.home = function () {
     el('div', { class: 'legend' }, 'Green: paid by the 10th · Blue: paid, but late · Red: nothing paid'),
     el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
     el('div', { class: 'tiles' },
-      tile('sand', 'msg', 'Balance update', 'Picture and text', function () { openImg('balance', null); }, 'b-balance'),
-      tile('sand', 'bell', 'Rent reminder', 'Picture and text', function () { openImg('reminder'); }, 'b-remind'),
+      tile('sand', 'msg', L.yearBalance > 0 ? 'Payment reminder' : 'Balance update', "Year's balance", function () { openImg('balance', null); }, 'b-balance'),
+      tile('sand', 'bell', 'Rent reminder', "This month's rent", function () { openImg('reminder'); }, 'b-remind'),
       tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
       tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt'),
       (function () { var K = nudgeCues(v); return tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge'); })(),
@@ -629,7 +629,7 @@ function openPay(p) {
       p.note ? el('p', { text: p.note }) : null,
       el('div', { class: 'actions2' },
         btn('primary', 'pays', 'Receipt picture', function () { openImg('receipt', p); }, 'receiptbtn'),
-        btn('', 'msg', 'Balance picture', function () { openImg('balance', p); })),
+        btn('', 'msg', view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance picture', function () { openImg('balance', p); })),
       photoStrip('pay', p.key),
       el('label', { class: 'f', for: 'delreason', text: 'Delete this payment (entered by mistake)' }),
       reason = el('input', { id: 'delreason', placeholder: 'Reason, for example typed twice' }),
@@ -863,7 +863,7 @@ SCREENS.message = function () {
     var pay = M.pay || v.D.payments.slice().sort(byDateDesc)[0] || null;
     text = balanceMessage_(v.D, v.L, pay, { arrears: M.arrears });
   } else text = reminderMessage_(v.D, v.L, v.today);
-  return el('div', null, backBar(M.kind === 'balance' ? 'Balance message' : 'Reminder text'),
+  return el('div', null, backBar(M.kind === 'balance' ? (view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance message') : 'Reminder text'),
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
     el('div', { class: 'msg', id: 'msgtext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
@@ -896,7 +896,7 @@ SCREENS.image = function () {
   if (I.kind === 'statement') { c = drawStatement(v, I.arrears); title = 'Statement'; name = 'Rent_Statement_' + v.L.year; }
   else if (I.kind === 'balance') {
     var bp = I.pay ? (v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay) : null;
-    c = drawBalance(v, bp, I.arrears); title = 'Balance update'; name = 'Rent_Balance';
+    c = drawBalance(v, bp, I.arrears); title = v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update'; name = v.L.yearBalance > 0 ? 'Payment_Reminder_' + v.today : 'Rent_Balance_' + v.today;
     caption = balanceMessage_(v.D, v.L, bp, { arrears: I.arrears });
   }
   else if (I.kind === 'receipt') {

@@ -218,10 +218,10 @@ function drawReceipt(v, pay, arrears) {
   return o.c;
 }
 
-// Balance update: picture that goes with the balance message.
+// Payment reminder (the year's balance; titled Balance Update once the year is clear): picture that goes with the balance message.
 function drawBalance(v, pay, arrears) {
   var L = v.L, D = v.D, Y = L.cur, o = canvas_(), g = o.g, x = DRAW.X, w = DRAW.W - 2 * x;
-  var y = header_(g, (D.property || '169-E, EME') + ' · Rent', 'Balance Update', 'As of ' + fmtDate_(v.today));
+  var y = header_(g, (D.property || '169-E, EME') + ' · Rent', L.yearBalance > 0 ? 'Payment Reminder' : 'Balance Update', 'As of ' + fmtDate_(v.today));
   y = greet_(g, y, D);
   var clear = L.yearBalance <= 0;
   var lines = [['Rent due so far', groupNum_(Y.rent)], ['Received', groupNum_(Y.paid)]];

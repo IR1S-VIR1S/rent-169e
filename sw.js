@@ -1,5 +1,5 @@
 /* 169-E Rent service worker: cache the app shell, never the data. */
-var BUILD = '066bc7db';
+var BUILD = '064c09a8';
 var CACHE = 'r169-' + BUILD;
 var FILES = ['./', 'index.html', 'app.css', 'app.js', 'logic.js', 'photos.js', 'draw.js', 'nudge.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'logo-160.png'];
 self.addEventListener('install', function (e) {
