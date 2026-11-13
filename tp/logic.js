@@ -261,8 +261,8 @@ function urduSalut_(D) {
   var t = D.tenancy || {}, first = String(t.tenant || '').trim().split(/\s+/)[0].toLowerCase();
   return URDU_NAMES[first] ? URDU_NAMES[first] + ' \u0628\u06be\u0627\u0626\u06cc' : '';
 }
-// Name first, an Urdu comma, then the salam: read right to left as one line.
-function salamLine_(D) { var u = urduSalut_(D); return u ? u + '\u060c ' + CFG.SALAM : CFG.SALAM; }
+// The salam first, then his name after an Urdu comma: read right to left as one line.
+function salamLine_(D) { var u = urduSalut_(D); return u ? CFG.SALAM + '\u060c ' + u : CFG.SALAM; }
 
 function wrapMsg_(D, body) {
   return [salamLine_(D), ''].concat(urduSalut_(D) ? [] : [salut_(D) + ',', '']).concat(body).concat(['', CFG.JAZAK]).join('\n');
@@ -416,4 +416,4 @@ function contactCounts_(D, from, to) {
   return C;
 }
 
-var NEED_SCRIPT = '2.9';
+var NEED_SCRIPT = '2.10';

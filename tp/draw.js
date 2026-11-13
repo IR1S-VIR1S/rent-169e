@@ -96,13 +96,16 @@ function drawStatement(v, withArrears) {
 
 // Shared layout for the tenant-facing pictures: header, greeting, a navy card, then rows and the month grid.
 function greet_(g, y, D) {
-  var line = salamLine_(D), size = 46;
+  // the salam line is centred and as large as fits the width, with clear space under the heading
+  var line = salamLine_(D), size = 54, maxW = DRAW.W - 2 * DRAW.X;
   g.font = '600 ' + size + 'px ' + DRAW.AR;
-  while (size > 30 && g.measureText(line).width > DRAW.W - 2 * DRAW.X) { size -= 2; g.font = '600 ' + size + 'px ' + DRAW.AR; }
-  ar_(g, line, DRAW.W - DRAW.X, y + 40, size, DRAW.navy, 'right');
-  if (urduSalut_(D)) return y + 84; // his name is already on the salam line
-  txt_(g, salut_(D) + ',', DRAW.X, y + 116, 40, 700);
-  return y + 150;
+  while (size > 30 && g.measureText(line).width > maxW) { size -= 1; g.font = '600 ' + size + 'px ' + DRAW.AR; }
+  y += 22;
+  ar_(g, line, DRAW.W / 2, y + size, size, DRAW.navy, 'center');
+  y += size + 34;
+  if (urduSalut_(D)) return y; // his name is already on the salam line
+  txt_(g, salut_(D) + ',', DRAW.X, y + 30, 40, 700);
+  return y + 66;
 }
 function cardLines_(g, x, y, w, lines) {
   lines.forEach(function (l, i) {
@@ -147,7 +150,7 @@ function lastPaidText_(D, today) {
   var n = dayNum_(today) - dayNum_(d);
   return n === 0 ? 'LAST PAID TODAY' : 'LAST PAID ' + daysText_(n).toUpperCase() + ' AGO';
 }
-function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 180, y + 165, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : ''); }
+function overdueStamp_(g, x, w, y, days, D, today) { stamp_(g, x + w - 196, y + 165, 'OVERDUE', '#FF7A7A', 36, daysText_(days).toUpperCase(), D ? lastPaidText_(D, today) : ''); }
 // The big amount, made smaller only when the stamp needs the room beside it.
 function amount_(g, s, x, y, maxW) {
   var size = 106; g.font = '800 ' + size + 'px ' + DRAW.F;
