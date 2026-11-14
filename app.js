@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '31047570';
+var BUILD_ID = '47f49925';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -905,12 +905,13 @@ SCREENS.message = function () {
   if (M.kind === 'balance') {
     var pay = M.pay || v.D.payments.slice().sort(byDateDesc)[0] || null;
     text = balanceMessage_(v.D, v.L, pay, { arrears: M.arrears });
-  } else if (M.kind === 'noreply') { var NR = noReplyInfo(v); if (!NR) { setTimeout(function () { go('home'); }, 0); return el('div'); } text = noReplyMessage(v, NR); }
+  } else if (M.kind === 'noreply') { var NR = noReplyInfo(v); if (!NR) { setTimeout(function () { go('home'); }, 0); return el('div'); } text = M.lang === 'en' ? noReplyMessage(v, NR) : noReplyMessageUr(v, NR); }
   else text = reminderMessage_(v.D, v.L, v.today);
   return el('div', null, backBar(M.kind === 'noreply' ? 'No reply today' : M.kind === 'balance' ? (view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance message') : 'Reminder text'),
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
-    el('div', { class: 'msg', id: 'msgtext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
+    M.kind === 'noreply' ? chips(['ur', 'en'], M.lang === 'en' ? 'en' : 'ur', function (x) { M.lang = x; render(); }, 'chips-lang', function (x) { return x === 'ur' ? '\u0627\u0631\u062f\u0648' : 'English'; }) : null,
+    el('div', { class: 'msg' + (M.kind === 'noreply' && M.lang !== 'en' ? ' ur' : ''), id: 'msgtext', lang: M.kind === 'noreply' && M.lang !== 'en' ? 'ur' : null }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
     el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Open ' + (v.D.tenancy.tenant || 'his') + "'s WhatsApp chat" : 'Open WhatsApp' })),
     ph ? null : el('p', { class: 'hint', text: 'Add his WhatsApp number in Settings to open his chat directly.' }),
