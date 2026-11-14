@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'a5856534';
+var BUILD_ID = '50dfc5f3';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -856,6 +856,23 @@ function waLink(text) {
   var ph = waPhone_(view().D.tenancy.phone);
   return 'https://wa.me/' + (ph || '') + '?text=' + encodeURIComponent(text);
 }
+// Anything sent to him from the app goes into the contact log by itself. A picture and its matching text, sent within
+// 10 minutes of each other, are one entry ("picture and text"). Copy is not logged: the app cannot tell where it goes.
+function logSent(what, part) {
+  var n = nowPk(), S = T.S, now = Date.now(), last = S.lastSent;
+  if (last && last.what === what && now - last.at < 600000) {
+    if (last.parts.indexOf(part) >= 0) return Promise.resolve();
+    last.parts.push(part);
+    var note = what + ' sent on WhatsApp (' + last.parts.join(' and ') + ').', o = S.outbox.filter(function (x) { return x.key === last.key && !x.error; })[0];
+    if (o) { o.notes = note; return saveState().then(function () { render(); }); }
+    return queue({ op: 'log', req_id: uuid(), key: last.key, date: last.date, time: last.time, kind: 'message', flag: '', notes: note }).then(function () { sync(true); });
+  }
+  var key = uuid();
+  S.lastSent = { what: what, at: now, key: key, date: n.date, time: n.time, parts: [part] };
+  return queue({ op: 'log', req_id: key, key: key, date: n.date, time: n.time, kind: 'message', flag: '', notes: what + ' sent on WhatsApp (' + part + ').' })
+    .then(function () { toast('Recorded in the contact log.'); setTimeout(function () { sync(true); }, 1500); });
+}
+function msgName(kind, v) { return kind === 'balance' ? (v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update') : kind === 'receipt' ? 'Receipt' : kind === 'statement' ? 'Statement' : kind === 'log' ? 'Contact log summary' : 'Rent reminder'; }
 function openMsg(kind, pay) { T.msg = { kind: kind, pay: pay, arrears: !!T.S.settings.arrearsInMsg }; go('message'); }
 SCREENS.message = function () {
   var v = view(), M = T.msg, text, ph = waPhone_(v.D.tenancy.phone);
@@ -867,11 +884,11 @@ SCREENS.message = function () {
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
     el('div', { class: 'msg', id: 'msgtext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
-    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener' }, svg('wa'),
+    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { logSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Open ' + (v.D.tenancy.tenant || 'his') + "'s WhatsApp chat" : 'Open WhatsApp' })),
     ph ? null : el('p', { class: 'hint', text: 'Add his WhatsApp number in Settings to open his chat directly.' }),
     el('div', { class: 'actions2' },
-      navigator.share ? btn('', 'share', 'Share', function () { navigator.share({ text: text }).catch(function () { }); }) : null,
+      navigator.share ? btn('', 'share', 'Share', function () { navigator.share({ text: text }).then(function () { logSent(msgName(M.kind, v), 'text'); }, function () { }); }) : null,
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); })));
 };
 
@@ -919,11 +936,11 @@ SCREENS.image = function () {
     btn('primary wide', 'share', 'Share picture', function () {
       if (!I.blob) return;
       var file = new File([I.blob], name, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).catch(function () { });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).then(function () { logSent(msgName(I.kind, v), 'picture'); }, function () { }); // a cancelled share is not logged
       else { var a = el('a', { href: I.url, download: name }); document.body.appendChild(a); a.click(); a.remove(); }
     }, 'sharestmt'),
     el('p', { class: 'hint', text: 'Choose WhatsApp, then ' + (v.D.tenancy.tenant || 'his chat') + '. ' + (caption ? 'Then send the matching text below.' : '') }),
-    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener' }, svg('wa'),
+    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener', onclick: function () { logSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Send the text in his chat' : 'Send the text on WhatsApp' })) : null,
     img);
 };
@@ -1001,7 +1018,7 @@ function tenantCard() {
       el('span', { class: 'chip ' + (link ? 'ok' : 'wait'), text: link ? 'On' : 'Off' })),
     el('p', { class: 'hint', text: 'A private link he can open without any login. It shows only this year: rent, payments, receipts and maintenance.' }),
     link ? el('div', null,
-      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener',
+      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener', onclick: function () { logSent('Link to his rent page', 'text'); },
         href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(wrapMsg_(D, ['Your rent page for 169-E: ' + link])) }, svg('wa'), el('span', { text: 'Send him the link' })),
       el('div', { class: 'actions2' },
         btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
