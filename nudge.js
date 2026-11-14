@@ -104,7 +104,7 @@ function openFacts() {
 }
 SCREENS.nudge = function () {
   var v = view(), K = nudgeCues(v), F = factsOf(), N = T.nudge || (T.nudge = { stage: 0 }), ph = waPhone_(v.D.tenancy.phone);
-  var stage = N.stage || K.next, info = NUDGES[stage - 1], text = nudgeMessage(v, stage, K, F);
+  var stage = N.stage || K.next, info = NUDGES[stage - 1], text = draftNudge(v, stage, K, F);
   var facts = [K.overdue ? daysText_(K.R.days) + ' overdue' : 'Nothing overdue today',
     K.C.unanswered ? plural_(K.C.unanswered, 'call') + ' not answered since ' + fmtDate_(K.from) : '',
     K.promise ? 'promised ' + fmtDate_(K.promise.by) + ', missed' : K.promiseOpen ? 'promise open until ' + fmtDate_(K.promiseOpen.by) : '',
@@ -120,7 +120,8 @@ SCREENS.nudge = function () {
         x.n + '. ' + x.name + (x.n === K.next ? ' (suggested)' : ''));
     })),
     el('p', { class: 'hint', id: 'nudgeaim', text: info.aim + '. Each approach is a different angle, not a louder version of the last.' }),
-    el('div', { class: 'msg', id: 'nudgetext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
+    langChips(),
+    msgBox(text, 'nudgetext'),
     el('a', { class: 'btn primary wide wa', id: 'nudgewa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: sent }, svg('wa'),
       el('span', { text: ph ? 'Send in his WhatsApp chat' : 'Open WhatsApp' })),
     el('p', { class: 'hint', text: 'When you come back, the app asks whether you sent it, and then records it in the contact log.' }),

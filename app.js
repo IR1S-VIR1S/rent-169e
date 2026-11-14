@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'be3dabae';
+var BUILD_ID = '77c8ff49';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -913,14 +913,14 @@ SCREENS.message = function () {
   var v = view(), M = T.msg, text, ph = waPhone_(v.D.tenancy.phone);
   if (M.kind === 'balance') {
     var pay = M.pay || v.D.payments.slice().sort(byDateDesc)[0] || null;
-    text = balanceMessage_(v.D, v.L, pay, { arrears: M.arrears });
-  } else if (M.kind === 'noreply') { var NR = noReplyInfo(v); if (!NR) { setTimeout(function () { go('home'); }, 0); return el('div'); } text = M.lang === 'en' ? noReplyMessage(v, NR) : noReplyMessageUr(v, NR); }
-  else text = reminderMessage_(v.D, v.L, v.today);
+    text = draftBalance(v.D, v.L, pay, { arrears: M.arrears });
+  } else if (M.kind === 'noreply') { var NR = noReplyInfo(v); if (!NR) { setTimeout(function () { go('home'); }, 0); return el('div'); } text = draftNoReply(v, NR); }
+  else text = draftReminder(v.D, v.L, v.today);
   return el('div', null, backBar(M.kind === 'noreply' ? 'No reply today' : M.kind === 'balance' ? (view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance message') : 'Reminder text'),
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
-    M.kind === 'noreply' ? chips(['ur', 'en'], M.lang === 'en' ? 'en' : 'ur', function (x) { M.lang = x; render(); }, 'chips-lang', function (x) { return x === 'ur' ? '\u0627\u0631\u062f\u0648' : 'English'; }) : null,
-    el('div', { class: 'msg' + (M.kind === 'noreply' && M.lang !== 'en' ? ' ur' : ''), id: 'msgtext', lang: M.kind === 'noreply' && M.lang !== 'en' ? 'ur' : null }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
+    langChips(),
+    msgBox(text, 'msgtext'),
     el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Open ' + (v.D.tenancy.tenant || 'his') + "'s WhatsApp chat" : 'Open WhatsApp' })),
     ph ? null : el('p', { class: 'hint', text: 'Add his WhatsApp number in Settings to open his chat directly.' }),
@@ -951,13 +951,13 @@ SCREENS.image = function () {
   else if (I.kind === 'balance') {
     var bp = I.pay ? (v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay) : null;
     c = drawBalance(v, bp, I.arrears, I.avg); title = v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update'; name = v.L.yearBalance > 0 ? 'Payment_Reminder_' + v.today : 'Rent_Balance_' + v.today;
-    caption = balanceMessage_(v.D, v.L, bp, { arrears: I.arrears });
+    caption = draftBalance(v.D, v.L, bp, { arrears: I.arrears });
   }
   else if (I.kind === 'receipt') {
     var p = v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay;
     c = drawReceipt(v, p, I.arrears); title = 'Receipt'; name = 'Rent_Receipt_' + (p.pay_id || p.date);
-    caption = balanceMessage_(v.D, v.L, p, { arrears: I.arrears });
-  } else if (I.kind === 'reminder') { c = drawReminder(v, I.arrears); title = 'Rent reminder'; name = 'Rent_Reminder_' + v.today.slice(0, 7); caption = reminderMessage_(v.D, v.L, v.today, { arrears: I.arrears }); }
+    caption = draftBalance(v.D, v.L, p, { arrears: I.arrears });
+  } else if (I.kind === 'reminder') { c = drawReminder(v, I.arrears); title = 'Rent reminder'; name = 'Rent_Reminder_' + v.today.slice(0, 7); caption = draftReminder(v.D, v.L, v.today, { arrears: I.arrears }); }
   else { var P = logPeriod(I.period, v.today, v.D); c = drawLogSummary(v, P.from, v.today, P.days !== undefined ? P.title + ' (' + (P.days ? daysText_(P.days) + ' ago' : 'today') + ')' : P.title); title = 'Contact log summary'; name = 'Contact_Log_' + v.today; }
   name += '_' + v.today + '.png';
   var img = el('img', { class: 'stmt', id: 'stmtimg', alt: title });
@@ -979,6 +979,8 @@ SCREENS.image = function () {
       else { var a = el('a', { href: I.url, download: name }); document.body.appendChild(a); a.click(); a.remove(); }
     }, 'sharestmt'),
     el('p', { class: 'hint', text: 'Choose WhatsApp, then ' + (v.D.tenancy.tenant || 'his chat') + '. ' + (caption ? 'Then send the matching text below.' : '') }),
+    caption ? langChips() : null,
+    caption ? msgBox(caption, 'captext') : null,
     caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Send the text in his chat' : 'Send the text on WhatsApp' })) : null,
     img);
@@ -1058,7 +1060,7 @@ function tenantCard() {
     el('p', { class: 'hint', text: 'A private link he can open without any login. It shows only this year: rent, payments, receipts and maintenance.' }),
     link ? el('div', null,
       el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener', onclick: function () { askSent('Link to his rent page', 'text'); },
-        href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(wrapMsg_(D, ['Your rent page for 169-E: ' + link])) }, svg('wa'), el('span', { text: 'Send him the link' })),
+        href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(draftLink(D, link)) }, svg('wa'), el('span', { text: 'Send him the link' })),
       el('div', { class: 'actions2' },
         btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
         btn('', 'link', 'Open it', function () { window.open(link, '_blank'); })),
