@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.10';
-var RELEASE_NOTE = '2.10: the salam comes first, then his name. Before that, 2.9: days overdue are counted from the due date of the oldest month of the year not yet fully paid (payments clear the oldest months first), so a small payment cannot reset them. Before that, 2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.11';
+var RELEASE_NOTE = '2.11: one-tap WhatsApp chat import: an Apple Shortcut in the iPhone share sheet sends the exported chat here, it waits in a private file until the phone reads it at the next sync, then it is deleted. Before that, 2.10: the salam comes first, then his name. Before that, 2.9: days overdue are counted from the due date of the oldest month of the year not yet fully paid (payments clear the oldest months first), so a small payment cannot reset them. Before that, 2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -743,6 +743,12 @@ function doGet(e) {
 
 function doPost(e) {
   var out;
+  if (e && e.parameter && e.parameter.drop) { // the Apple Shortcut: plain words back, shown on the iPhone
+    var msg;
+    try { msg = chatDrop_(String(e.parameter.drop), JSON.parse(e.postData.contents || '{}')); }
+    catch (err) { msg = 'Not received: ' + String(err && err.message || err); }
+    return ContentService.createTextOutput(msg);
+  }
   try { out = api_(JSON.parse(e.postData.contents)); }
   catch (err) { out = { ok: false, code: 400, error: 'Bad request: ' + String(err && err.message || err) }; }
   return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
@@ -761,13 +767,56 @@ function api_(b) {
   if (b.op === 'pull') {
     var D = loadData_(); D.today = today_(); D.version = VERSION;
     D.tenantLink = tenantLink_(); D.tenantLastView = props.getProperty('TENANT_LAST_VIEW') || '';
+    var cd = props.getProperty('CHATDROP_FILE'); D.chatDrop = cd ? JSON.parse(cd).at : ''; D.chatDropOn = !!props.getProperty('CHATDROP');
     return { ok: true, data: D };
   }
   if (b.op === 'selfupdate') return selfUpdate_('the paired phone');
+  if (b.op === 'chatkey') { var ck = rand_(28); props.setProperty('CHATDROP', sha_(ck)); log_('one-tap chat import set up', ''); return { ok: true, code: ck }; }
+  if (b.op === 'chatget') return chatGet_();
+  if (b.op === 'chatdone') { chatClear_(); return { ok: true }; }
   if (b.op === 'push') return push_(b.items || []);
   if (b.op === 'upload') return upload_(b);
   if (b.op === 'file') return getFile_(b);
   return { ok: false, code: 400, error: 'Unknown request.' };
+}
+
+// ---------- WhatsApp chat sent from the iPhone share sheet by an Apple Shortcut ----------
+// The Shortcut posts { zip: <the exported file, base64> } to the web app address with ?drop=<code>. The code can only drop a chat;
+// it reads nothing. The text waits in a private Drive file until the paired phone fetches it (chatget) and confirms (chatdone).
+function chatDrop_(code, b) {
+  var props = PropertiesService.getScriptProperties(), hash = props.getProperty('CHATDROP');
+  if (!hash || sha_(code) !== hash) return 'Not accepted: this shortcut has an old address. Set up one-tap import again in the 169-E Rent app.';
+  var raw = String(b.zip || b.text || '');
+  if (!raw) return 'Nothing received. In the shortcut, the field must be named zip and hold the Base64 Encoded file.';
+  if (raw.length > 12000000) return 'Too large. In WhatsApp choose Export Chat, Without Media.';
+  var text = '';
+  if (b.zip) {
+    var bytes = Utilities.base64Decode(raw.replace(/\s+/g, ''));
+    if (bytes.length > 3 && bytes[0] === 80 && bytes[1] === 75) {
+      var files = Utilities.unzip(Utilities.newBlob(bytes, 'application/zip', 'chat.zip'));
+      for (var i = 0; i < files.length; i++) if (/\.txt$/i.test(files[i].getName())) { text = files[i].getDataAsString('UTF-8'); break; }
+      if (!text) return 'No chat text found in that file. Use WhatsApp > Export Chat > Without Media.';
+    } else text = Utilities.newBlob(bytes, 'text/plain', 'chat.txt').getDataAsString('UTF-8');
+  } else text = raw;
+  if (!/\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}/.test(text.slice(0, 600))) return 'That does not look like a WhatsApp chat export.';
+  chatClear_();
+  var f = receiptsFolder_().createFile(Utilities.newBlob(text, 'text/plain', 'whatsapp-chat-waiting.txt'));
+  props.setProperty('CHATDROP_FILE', JSON.stringify({ id: f.getId(), at: nowStamp_() }));
+  log_('WhatsApp chat received from the share sheet', '');
+  return 'Received. Open 169-E Rent: it reads the chat by itself.';
+}
+function chatGet_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('CHATDROP_FILE');
+  if (!raw) return { ok: true, none: true };
+  var d = JSON.parse(raw);
+  try { return { ok: true, at: d.at, text: DriveApp.getFileById(d.id).getBlob().getDataAsString('UTF-8') }; }
+  catch (e) { chatClear_(); return { ok: true, none: true }; }
+}
+function chatClear_() {
+  var props = PropertiesService.getScriptProperties(), raw = props.getProperty('CHATDROP_FILE');
+  if (!raw) return;
+  try { DriveApp.getFileById(JSON.parse(raw).id).setTrashed(true); } catch (e) { }
+  props.deleteProperty('CHATDROP_FILE');
 }
 
 function join_(b) {

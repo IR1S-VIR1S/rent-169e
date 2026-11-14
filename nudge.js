@@ -321,8 +321,58 @@ function applyChat(parsed, him) {
   S.outbox = S.outbox.concat(jobs);
   return saveState().then(function () { return { added: added, changed: changed, total: parsed.msgs.length, from: from }; });
 }
-function openChatImport() {
-  var I = T.chat = { err: '', parsed: null, him: '', done: null };
+// ---------- one-tap import: the chat sent from the share sheet waits in the workbook; the phone fetches it after a sync ----------
+function himFor(P) { return (T.S.settings.wa && P.names.indexOf(T.S.settings.wa.him) >= 0 ? T.S.settings.wa.him : '') || guessTenant(P.names, view().D.tenancy.tenant); }
+function fetchDrop() {
+  var S = T.S;
+  if (!S || !S.data || !S.data.chatDrop || T.dropBusy || T.sheet) return Promise.resolve();
+  T.dropBusy = true;
+  return api({ op: 'chatget', token: S.token }).then(function (r) {
+    if (!r.ok || r.none || T.S !== S) return;
+    var P = parseChat(r.text || '');
+    if (!P.msgs.length) return api({ op: 'chatdone', token: S.token }).then(function () { S.data.chatDrop = ''; toast('The chat sent from WhatsApp could not be read. Export it again.'); });
+    var him = himFor(P);
+    if (!him) { openChatImport(P); return; } // asks which name is his, then finishes
+    return applyChat(P, him).then(function (x) {
+      S.data.chatDrop = '';
+      return api({ op: 'chatdone', token: S.token }).catch(function () { }).then(function () {
+        toast('WhatsApp chat imported: ' + x.added + ' day(s) added, ' + x.changed + ' updated.'); render(); sync(true);
+      });
+    });
+  }).catch(function () { }).finally(function () { T.dropBusy = false; });
+}
+function openDropSetup() {
+  var Q = T.dropSetup = { url: '', err: '', busy: true };
+  api({ op: 'chatkey', token: T.S.token }).then(function (r) {
+    Q.busy = false;
+    if (r.ok && r.code) Q.url = T.S.api + (T.S.api.indexOf('?') < 0 ? '?' : '&') + 'drop=' + r.code;
+    else Q.err = 'Update the workbook first (169-E Rent > Install update in the Sheet), then try again.';
+    render();
+  }, function () { Q.busy = false; Q.err = 'No signal. Try again when you are online.'; render(); });
+  function step(n, t) { return el('div', { class: 'row' }, el('b', { text: String(n) }), el('div', { class: 'grow', text: t })); }
+  sheetOpen(function () {
+    return sheetWrap('One-tap import', [
+      el('h2', { text: 'One-tap import from WhatsApp' }),
+      el('p', { class: 'muted', text: 'Done once. It makes a button in the iPhone share sheet that sends the exported chat to your own Sheet; this app then reads it by itself.' }),
+      Q.busy ? el('p', { class: 'muted', text: 'Preparing' }) : null,
+      Q.err ? el('div', { class: 'err', id: 'droperr', text: Q.err }) : null,
+      Q.url ? el('div', { class: 'card', id: 'dropsteps' },
+        step(1, 'Tap Copy address below.'),
+        step(2, 'Open the Shortcuts app, tap +, and name it: Send to 169-E Rent.'),
+        step(3, 'Tap the (i) at the bottom and turn on Show in Share Sheet.'),
+        step(4, 'Add the action Base64 Encode. Its input is Shortcut Input. Set Line Breaks to None.'),
+        step(5, 'Add the action Get Contents of URL and paste the address. Tap the arrow: Method POST, Request Body JSON.'),
+        step(6, 'Add new field > Text. Key: zip. Value: choose the variable Base64 Encoded.'),
+        step(7, 'Add the action Show Result, then tap Done.')) : null,
+      Q.url ? btn('primary wide', 'copy', 'Copy address', function () { navigator.clipboard.writeText(Q.url).then(function () { toast('Copied. Paste it in the shortcut.'); }, function () { toast('Could not copy.'); }); }, 'dropcopy') : null,
+      Q.url ? el('p', { class: 'hint', text: 'After that: in WhatsApp open his chat, tap his name, Export Chat, Without Media, then tap Send to 169-E Rent. It says Received. Open this app and the log updates.' }) : null,
+      Q.url ? el('p', { class: 'hint', text: 'Keep the address private: anyone who has it could send a chat file to your Sheet (they cannot read anything). Setting up again makes a new address and switches the old one off.' }) : null,
+      btn('wide', 'x', 'Close', function () { T.dropSetup = null; sheetClose(); }, 'dropclose')]);
+  });
+}
+function openChatImport(pre) {
+  var I = T.chat = { err: '', parsed: null, him: '', done: null, drop: false };
+  if (pre && pre.msgs) { I.parsed = pre; I.drop = true; }
   function pick(e) {
     var f = e.target.files && e.target.files[0];
     if (!f) return;
@@ -332,11 +382,17 @@ function openChatImport() {
       var P = parseChat(text);
       if (!P.msgs.length) throw new Error('No messages found in that file. Choose the file made by WhatsApp > Export Chat.');
       I.parsed = P; I.err = '';
-      I.him = (T.S.settings.wa && P.names.indexOf(T.S.settings.wa.him) >= 0 ? T.S.settings.wa.him : '') || guessTenant(P.names, view().D.tenancy.tenant);
+      I.him = himFor(P);
       if (I.him) return finish(); render();
     }).catch(function (x) { I.err = (x && x.message) || 'Could not read that file.'; I.parsed = null; render(); });
   }
-  function finish() { return applyChat(I.parsed, I.him).then(function (r) { I.done = r; I.parsed = null; render(); sync(true); }); }
+  function finish() {
+    return applyChat(I.parsed, I.him).then(function (r) {
+      I.done = r; I.parsed = null;
+      if (I.drop) { T.S.data.chatDrop = ''; api({ op: 'chatdone', token: T.S.token }).catch(function () { }); }
+      render(); sync(true);
+    });
+  }
   sheetOpen(function () {
     var st = chatStale();
     return sheetWrap('Import WhatsApp chat', [
@@ -353,7 +409,8 @@ function openChatImport() {
       I.done || I.parsed ? null : el('input', { id: 'chatfile', type: 'file', accept: '.zip,.txt,application/zip,text/plain', class: 'hidefile', onchange: pick }),
       el('div', { class: 'err', id: 'chaterr', text: I.err }),
       el('p', { class: 'hint', text: 'The chat is read on this phone. Only one line per day goes to the log: counts, missed calls and up to three of his messages, shortened.' }),
-      btn('wide', 'x', I.done ? 'Done' : 'Close', sheetClose, 'chatclose')]);
+      I.done || I.parsed ? null : btn('wide', 'share', view().D.chatDropOn ? 'One-tap import: set up again' : 'Set up one-tap import', function () { T.chat = null; openDropSetup(); }, 'dropsetup'),
+      btn('wide', 'x', I.done ? 'Done' : 'Close', function () { T.chat = null; sheetClose(); }, 'chatclose')]);
   });
 }
 function chatCard() {
