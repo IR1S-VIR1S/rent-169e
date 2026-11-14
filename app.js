@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '47f49925';
+var BUILD_ID = 'be3dabae';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -516,23 +516,32 @@ SCREENS.home = function () {
     lastFlag ? el('button', { class: 'card flagcard', type: 'button', onclick: function () { go('log'); } }, svg('flag'),
       el('div', null, el('b', { text: 'Red flag: ' + lastFlag.flag }), el('div', { class: 'sm', text: fmtDate_(lastFlag.date) + (lastFlag.time ? ' · ' + lastFlag.time : '') }))) : null,
     chatCard(),
-    noReplyCard(),
     el('div', { class: 'card' },
       el('div', { class: 'row' },
         el('div', null, el('b', { text: monthName_(mk) }), el('div', { class: 'sm', text: r ? fmtRs_(r.rent) + ' due by the ' + ordinal_(r.due_day) : '' })),
         status),
       el('div', { class: 'row' }, el('div', { class: 'sm', text: 'Average paid per month in ' + yr }), el('div', { class: 'amt', text: fmtRs_(L.avgPaid) }))),
+    el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
+    (function () {
+      var K = nudgeCues(v), NR = noReplyInfo(v), nrSent = D.logs.some(function (g) { return g.date === v.today && /^No-reply note sent/.test(g.notes || ''); });
+      var follow = tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge');
+      var third = NR && !nrSent ? tile('red', 'msg', 'No reply from him today', 'Day ' + NR.none + ' of ' + NR.of + ' · send a note', function () { openMsg('noreply'); }, 'b-noreply') : follow;
+      var more = [tile('sand', 'bell', 'Rent reminder', "This month's rent", function () { openImg('reminder'); }, 'b-remind'),
+        tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
+        tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt')];
+      if (third !== follow) more.push(follow);
+      return el('div', null,
+        el('div', { class: 'tiles six' },
+          tile('sand', 'msg', L.yearBalance > 0 ? 'Payment reminder' : 'Balance update', "Year's balance", function () { openImg('balance', null); }, 'b-balance'),
+          tile('sand', 'callout', 'Call on WhatsApp', T.S.pendingCall ? 'Outcome to fill in' : 'Logged automatically', startCall, 'b-call'),
+          third),
+        el('button', { class: 'fold', type: 'button', id: 'moresend', 'aria-expanded': T.moreSend ? 'true' : 'false', onclick: function () { T.moreSend = !T.moreSend; render(); } },
+          T.moreSend ? 'Fewer' : 'More to send (' + more.length + ')'),
+        T.moreSend ? el('div', { class: 'tiles six', id: 'moretiles' }, more) : null);
+    })(),
     el('h2', { text: 'Received in ' + yr }),
     el('div', { class: 'grid', id: 'grid' }, monthCells(L, D)),
     el('div', { class: 'legend' }, 'Green: paid by the 10th · Blue: paid, but late · Red: nothing paid'),
-    el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
-    el('div', { class: 'tiles' },
-      tile('sand', 'msg', L.yearBalance > 0 ? 'Payment reminder' : 'Balance update', "Year's balance", function () { openImg('balance', null); }, 'b-balance'),
-      tile('sand', 'bell', 'Rent reminder', "This month's rent", function () { openImg('reminder'); }, 'b-remind'),
-      tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
-      tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt'),
-      (function () { var K = nudgeCues(v); return tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge'); })(),
-      tile('sand', 'callout', 'Call on WhatsApp', T.S.pendingCall ? 'Outcome to fill in' : 'Logged automatically', startCall, 'b-call')),
     el('h2', { text: 'Latest payments' }),
     el('div', { class: 'card list' }, recent.length ? recent.map(payRow) : el('p', { class: 'muted', text: 'None yet.' })));
 };
@@ -923,7 +932,7 @@ SCREENS.message = function () {
 // ---------- pictures ----------
 function openImg(kind, pay) {
   var t = todayPk();
-  T.img = { kind: kind, pay: pay, arrears: !!T.S.settings.arrearsInMsg, period: '30', url: '', blob: null };
+  T.img = { kind: kind, pay: pay, avg: T.S.settings.avgInPic !== false, arrears: !!T.S.settings.arrearsInMsg, period: '30', url: '', blob: null };
   go('image');
 }
 function lastPayDate(D) { return (D.payments || []).reduce(function (m, x) { return x.date > m ? x.date : m; }, ''); }
@@ -941,7 +950,7 @@ SCREENS.image = function () {
   if (I.kind === 'statement') { c = drawStatement(v, I.arrears); title = 'Statement'; name = 'Rent_Statement_' + v.L.year; }
   else if (I.kind === 'balance') {
     var bp = I.pay ? (v.D.payments.filter(function (x) { return x.key === I.pay.key; })[0] || I.pay) : null;
-    c = drawBalance(v, bp, I.arrears); title = v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update'; name = v.L.yearBalance > 0 ? 'Payment_Reminder_' + v.today : 'Rent_Balance_' + v.today;
+    c = drawBalance(v, bp, I.arrears, I.avg); title = v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update'; name = v.L.yearBalance > 0 ? 'Payment_Reminder_' + v.today : 'Rent_Balance_' + v.today;
     caption = balanceMessage_(v.D, v.L, bp, { arrears: I.arrears });
   }
   else if (I.kind === 'receipt') {
@@ -961,6 +970,8 @@ SCREENS.image = function () {
     I.kind === 'log' ? chips((lastPayDate(v.D) ? ['pay'] : []).concat(['30', '60', '90', 'year', 'all']), I.period, function (x) { I.period = x; render(); }, 'chips-period', function (x) { return logPeriod(x, v.today, v.D).title; }) : null,
     I.kind !== 'log' ? el('label', { class: 'switch', for: 'starr' }, el('span', { text: 'Mention earlier arrears in the picture' + (I.kind === 'statement' ? '' : ' and text') }),
       el('input', { id: 'starr', type: 'checkbox', checked: I.arrears, onchange: function (e) { I.arrears = e.target.checked; render(); } })) : null,
+    I.kind === 'balance' && v.L.yearBalance > 0 ? el('label', { class: 'switch', for: 'stavg' }, el('span', { text: 'Show average paid per month' }),
+      el('input', { id: 'stavg', type: 'checkbox', checked: I.avg, onchange: function (e) { I.avg = e.target.checked; T.S.settings.avgInPic = I.avg; saveState(); render(); } })) : null,
     btn('primary wide', 'share', 'Share picture', function () {
       if (!I.blob) return;
       var file = new File([I.blob], name, { type: 'image/png' });

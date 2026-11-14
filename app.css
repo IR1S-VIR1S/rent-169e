@@ -211,3 +211,6 @@ img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; 
 
 /* Urdu message preview in Nastaliq where the phone has it */
 .msg.ur { font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Geeza Pro', serif; font-size: 17px; line-height: 2.3; text-align: right; }
+
+/* Home: fold button for the less used tiles */
+.fold { appearance: none; display: block; width: 100%; margin: 0 0 10px; padding: 10px; border: 1px dashed var(--line); border-radius: 12px; background: transparent; color: var(--muted, #4B5563); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
