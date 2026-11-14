@@ -416,4 +416,4 @@ function contactCounts_(D, from, to) {
   return C;
 }
 
-var NEED_SCRIPT = '2.11';
+var NEED_SCRIPT = '2.12';

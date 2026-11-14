@@ -341,11 +341,14 @@ function fetchDrop() {
     });
   }).catch(function () { }).finally(function () { T.dropBusy = false; });
 }
-function openDropSetup() {
-  var Q = T.dropSetup = { url: '', err: '', busy: true };
-  api({ op: 'chatkey', token: T.S.token }).then(function (r) {
+// The address is made once and kept on this phone, so opening this screen again shows the SAME address
+// (making a new one each time switched off the one already pasted in the shortcut). "Make a new address" replaces it on purpose.
+function openDropSetup(fresh) {
+  var kept = !fresh && T.S.settings.dropUrl && view().D.chatDropOn ? T.S.settings.dropUrl : '';
+  var Q = T.dropSetup = { url: kept, err: '', busy: !kept };
+  if (!kept) api({ op: 'chatkey', token: T.S.token }).then(function (r) {
     Q.busy = false;
-    if (r.ok && r.code) Q.url = T.S.api + (T.S.api.indexOf('?') < 0 ? '?' : '&') + 'drop=' + r.code;
+    if (r.ok && r.code) { Q.url = T.S.api + (T.S.api.indexOf('?') < 0 ? '?' : '&') + 'drop=' + r.code; T.S.settings.dropUrl = Q.url; if (T.S.data) T.S.data.chatDropOn = true; saveState(); }
     else Q.err = 'Update the workbook first (169-E Rent > Install update in the Sheet), then try again.';
     render();
   }, function () { Q.busy = false; Q.err = 'No signal. Try again when you are online.'; render(); });
@@ -366,7 +369,8 @@ function openDropSetup() {
         step(7, 'Add the action Show Result, then tap Done.')) : null,
       Q.url ? btn('primary wide', 'copy', 'Copy address', function () { navigator.clipboard.writeText(Q.url).then(function () { toast('Copied. Paste it in the shortcut.'); }, function () { toast('Could not copy.'); }); }, 'dropcopy') : null,
       Q.url ? el('p', { class: 'hint', text: 'After that: in WhatsApp open his chat, tap his name, Export Chat, Without Media, then tap Send to 169-E Rent. It says Received. Open this app and the log updates.' }) : null,
-      Q.url ? el('p', { class: 'hint', text: 'Keep the address private: anyone who has it could send a chat file to your Sheet (they cannot read anything). Setting up again makes a new address and switches the old one off.' }) : null,
+      Q.url ? el('p', { class: 'hint', text: 'This address stays the same each time you open this screen. Keep it private: anyone who has it could send a chat file to your Sheet (they cannot read anything).' }) : null,
+      Q.url ? btn('wide', 'sync', 'Make a new address (switches the old one off)', function () { if (confirm('The shortcut will stop working until you paste the new address into it. Continue?')) openDropSetup(true); }, 'dropnew') : null,
       btn('wide', 'x', 'Close', function () { T.dropSetup = null; sheetClose(); }, 'dropclose')]);
   });
 }
@@ -409,7 +413,7 @@ function openChatImport(pre) {
       I.done || I.parsed ? null : el('input', { id: 'chatfile', type: 'file', accept: '.zip,.txt,application/zip,text/plain', class: 'hidefile', onchange: pick }),
       el('div', { class: 'err', id: 'chaterr', text: I.err }),
       el('p', { class: 'hint', text: 'The chat is read on this phone. Only one line per day goes to the log: counts, missed calls and up to three of his messages, shortened.' }),
-      I.done || I.parsed ? null : btn('wide', 'share', view().D.chatDropOn ? 'One-tap import: set up again' : 'Set up one-tap import', function () { T.chat = null; openDropSetup(); }, 'dropsetup'),
+      I.done || I.parsed ? null : btn('wide', 'share', T.S.settings.dropUrl && view().D.chatDropOn ? 'One-tap import: address and steps' : 'Set up one-tap import', function () { T.chat = null; openDropSetup(); }, 'dropsetup'),
       btn('wide', 'x', I.done ? 'Done' : 'Close', function () { T.chat = null; sheetClose(); }, 'chatclose')]);
   });
 }
