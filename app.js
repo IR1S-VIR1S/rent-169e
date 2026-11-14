@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '50dfc5f3';
+var BUILD_ID = '06662e3a';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -273,6 +273,7 @@ function render() {
   var fab = bar && FAB[T.screen] && FAB[T.screen]();
   if (fab) document.body.appendChild(el('button', { class: 'fab', id: 'fab', type: 'button', onclick: fab[2] }, svg(fab[0]), fab[1]));
   if (bar && !T.sheet && typeof callDue === 'function' && callDue()) T.sheet = callSheet;
+  if (!T.sheet && T.key && T.S && T.screen !== 'unlock' && sentDue()) T.sheet = sentSheet;
   if (T.sheet) document.body.appendChild(T.sheet());
 }
 var FAB = {
@@ -856,16 +857,39 @@ function waLink(text) {
   var ph = waPhone_(view().D.tenancy.phone);
   return 'https://wa.me/' + (ph || '') + '?text=' + encodeURIComponent(text);
 }
-// Anything sent to him from the app goes into the contact log by itself. A picture and its matching text, sent within
-// 10 minutes of each other, are one entry ("picture and text"). Copy is not logged: the app cannot tell where it goes.
-function logSent(what, part) {
-  var n = nowPk(), S = T.S, now = Date.now(), last = S.lastSent;
+// Sending from the app: when you come back from WhatsApp the app asks "Did you send it?" and logs it only on Yes.
+// A picture and its matching text, confirmed within 10 minutes of each other, are one entry ("picture and text").
+// Copy is not asked about: the app cannot tell where it goes.
+function askSent(what, part, now, note) {
+  var n = nowPk();
+  T.S.pendingSent = { what: what, part: part, note: note || '', date: n.date, time: n.time, at: Date.now(), back: !!now };
+  saveState().then(function () { if (now) render(); });
+}
+function sentDue() { var P = T.S && T.S.pendingSent; return !!P && (P.back || Date.now() - P.at > 8000); }
+function sentSheet() {
+  var P = T.S.pendingSent, who = view().D.tenancy.tenant ? String(view().D.tenancy.tenant).split(/\s+/)[0] : 'him';
+  function done(yes) {
+    T.S.pendingSent = null; T.sheet = null;
+    if (!yes) { saveState().then(function () { render(); toast('Not logged.'); }); return; }
+    if (P.note && T.nudge) T.nudge.stage = 0;
+    logSent(P.what, P.part, P).then(function () { render(); });
+  }
+  return el('div', { class: 'sheet-bg' },
+    el('div', { class: 'sheet', role: 'dialog', 'aria-label': 'Message sent?', id: 'sentsheet' },
+      el('h2', { text: 'Did you send it to ' + who + '?' }),
+      el('p', { class: 'muted', text: P.what + ' (' + P.part + ') · ' + fmtDate_(P.date) + ' · ' + P.time }),
+      btn('primary wide', 'check', 'Yes, log it', function () { done(true); }, 'sentyes'),
+      btn('wide', 'x', 'No, not sent', function () { done(false); }, 'sentno')));
+}
+function logSent(what, part, P) {
+  var n = P || nowPk(), S = T.S, now = Date.now(), last = S.lastSent;
+  if (P && P.note) { var k0 = uuid(); return queue({ op: 'log', req_id: k0, key: k0, date: n.date, time: n.time, kind: 'message', flag: '', notes: P.note }).then(function () { toast('Recorded in the contact log.'); sync(true); }); }
   if (last && last.what === what && now - last.at < 600000) {
     if (last.parts.indexOf(part) >= 0) return Promise.resolve();
     last.parts.push(part);
     var note = what + ' sent on WhatsApp (' + last.parts.join(' and ') + ').', o = S.outbox.filter(function (x) { return x.key === last.key && !x.error; })[0];
-    if (o) { o.notes = note; return saveState().then(function () { render(); }); }
-    return queue({ op: 'log', req_id: uuid(), key: last.key, date: last.date, time: last.time, kind: 'message', flag: '', notes: note }).then(function () { sync(true); });
+    if (o) { o.notes = note; return saveState().then(function () { toast('Added to the same log entry.'); }); }
+    return queue({ op: 'log', req_id: uuid(), key: last.key, date: last.date, time: last.time, kind: 'message', flag: '', notes: note }).then(function () { toast('Added to the same log entry.'); sync(true); });
   }
   var key = uuid();
   S.lastSent = { what: what, at: now, key: key, date: n.date, time: n.time, parts: [part] };
@@ -884,11 +908,11 @@ SCREENS.message = function () {
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
     el('div', { class: 'msg', id: 'msgtext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
-    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { logSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
+    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Open ' + (v.D.tenancy.tenant || 'his') + "'s WhatsApp chat" : 'Open WhatsApp' })),
     ph ? null : el('p', { class: 'hint', text: 'Add his WhatsApp number in Settings to open his chat directly.' }),
     el('div', { class: 'actions2' },
-      navigator.share ? btn('', 'share', 'Share', function () { navigator.share({ text: text }).then(function () { logSent(msgName(M.kind, v), 'text'); }, function () { }); }) : null,
+      navigator.share ? btn('', 'share', 'Share', function () { navigator.share({ text: text }).then(function () { askSent(msgName(M.kind, v), 'text', true); }, function () { }); }) : null,
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); })));
 };
 
@@ -936,11 +960,11 @@ SCREENS.image = function () {
     btn('primary wide', 'share', 'Share picture', function () {
       if (!I.blob) return;
       var file = new File([I.blob], name, { type: 'image/png' });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).then(function () { logSent(msgName(I.kind, v), 'picture'); }, function () { }); // a cancelled share is not logged
+      if (navigator.canShare && navigator.canShare({ files: [file] })) navigator.share({ files: [file] }).then(function () { askSent(msgName(I.kind, v), 'picture', true); }, function () { }); // a cancelled share is not asked about
       else { var a = el('a', { href: I.url, download: name }); document.body.appendChild(a); a.click(); a.remove(); }
     }, 'sharestmt'),
     el('p', { class: 'hint', text: 'Choose WhatsApp, then ' + (v.D.tenancy.tenant || 'his chat') + '. ' + (caption ? 'Then send the matching text below.' : '') }),
-    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener', onclick: function () { logSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
+    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Send the text in his chat' : 'Send the text on WhatsApp' })) : null,
     img);
 };
@@ -1018,7 +1042,7 @@ function tenantCard() {
       el('span', { class: 'chip ' + (link ? 'ok' : 'wait'), text: link ? 'On' : 'Off' })),
     el('p', { class: 'hint', text: 'A private link he can open without any login. It shows only this year: rent, payments, receipts and maintenance.' }),
     link ? el('div', null,
-      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener', onclick: function () { logSent('Link to his rent page', 'text'); },
+      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener', onclick: function () { askSent('Link to his rent page', 'text'); },
         href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(wrapMsg_(D, ['Your rent page for 169-E: ' + link])) }, svg('wa'), el('span', { text: 'Send him the link' })),
       el('div', { class: 'actions2' },
         btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
@@ -1125,7 +1149,8 @@ document.addEventListener('visibilitychange', function () {
   if (document.visibilityState === 'visible') {
     checkUpdate();
     if (T.key && Date.now() - T.idleAt > IDLE_MS) lock();
-    else if (T.S) { sync(true); if (T.S.pendingCall && !T.sheet) setTimeout(function () { if (T.S && !T.sheet) softRender(); }, 600); }
+    else if (T.S) { sync(true); if (T.S.pendingSent && !T.sheet) { T.S.pendingSent.back = true; setTimeout(function () { if (T.S && !T.sheet) softRender(); }, 500); }
+      if (T.S.pendingCall && !T.sheet) setTimeout(function () { if (T.S && !T.sheet) softRender(); }, 600); }
   }
 });
 window.addEventListener('online', function () { if (T.S) sync(true); });
@@ -1173,7 +1198,7 @@ function resumeSession() {
 }
 function quiet() {
   var a = document.activeElement;
-  return !T.form && !T.sheet && !T.syncing && !T.msg && !T.img && !(T.S && T.S.pendingCall) && !(a && a.matches && a.matches('input,textarea,select'));
+  return !T.form && !T.sheet && !T.syncing && !T.msg && !T.img && !(T.S && (T.S.pendingCall || T.S.pendingSent)) && !(a && a.matches && a.matches('input,textarea,select'));
 }
 var UPD = { waiting: null, had: false, going: false, checked: 0 };
 function applyUpdate(force) {

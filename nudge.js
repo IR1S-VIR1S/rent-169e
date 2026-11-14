@@ -110,11 +110,7 @@ SCREENS.nudge = function () {
     K.promise ? 'promised ' + fmtDate_(K.promise.by) + ', missed' : K.promiseOpen ? 'promise open until ' + fmtDate_(K.promiseOpen.by) : '',
     K.lastStage ? 'last sent: approach ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : 'no follow-up sent yet'].filter(Boolean).join(' · ');
   var missing = FACT_KEYS.filter(function (k) { return !F[k]; });
-  function sent() {
-    var n = nowPk();
-    queue({ op: 'log', req_id: uuid(), key: uuid(), date: n.date, time: n.time, kind: 'message', flag: '', notes: 'Approach ' + stage + ' (' + info.name + ') sent on WhatsApp.' })
-      .then(function () { T.nudge.stage = 0; sync(true); toast('Recorded in the log.'); });
-  }
+  function sent() { askSent('Follow-up message, approach ' + stage, 'text', false, 'Approach ' + stage + ' (' + info.name + ') sent on WhatsApp.'); }
   return el('div', null, backBar('Follow-up message'),
     el('div', { class: 'note', id: 'nudgecues', text: facts }),
     K.promiseOpen ? el('p', { class: 'hint', text: 'He has a promise still running. Consider waiting until ' + fmtDate_(K.promiseOpen.by) + '.' }) : null,
@@ -127,7 +123,7 @@ SCREENS.nudge = function () {
     el('div', { class: 'msg', id: 'nudgetext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
     el('a', { class: 'btn primary wide wa', id: 'nudgewa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: sent }, svg('wa'),
       el('span', { text: ph ? 'Send in his WhatsApp chat' : 'Open WhatsApp' })),
-    el('p', { class: 'hint', text: 'Tapping Send records it in the contact log. Read it once before you press send in WhatsApp.' }),
+    el('p', { class: 'hint', text: 'When you come back, the app asks whether you sent it, and then records it in the contact log.' }),
     el('div', { class: 'actions2' },
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }, 'nudgecopy'),
       btn('', 'doc', 'Facts' + (missing.length ? ' (' + missing.length + ' missing)' : ''), openFacts, 'nudgefacts')));
