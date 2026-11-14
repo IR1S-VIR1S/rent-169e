@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '3ea54f26';
+var BUILD_ID = '31047570';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -516,6 +516,7 @@ SCREENS.home = function () {
     lastFlag ? el('button', { class: 'card flagcard', type: 'button', onclick: function () { go('log'); } }, svg('flag'),
       el('div', null, el('b', { text: 'Red flag: ' + lastFlag.flag }), el('div', { class: 'sm', text: fmtDate_(lastFlag.date) + (lastFlag.time ? ' · ' + lastFlag.time : '') }))) : null,
     chatCard(),
+    noReplyCard(),
     el('div', { class: 'card' },
       el('div', { class: 'row' },
         el('div', null, el('b', { text: monthName_(mk) }), el('div', { class: 'sm', text: r ? fmtRs_(r.rent) + ' due by the ' + ordinal_(r.due_day) : '' })),
@@ -897,15 +898,16 @@ function logSent(what, part, P) {
   return queue({ op: 'log', req_id: key, key: key, date: n.date, time: n.time, kind: 'message', flag: '', notes: what + ' sent on WhatsApp (' + part + ').' })
     .then(function () { toast('Recorded in the contact log.'); setTimeout(function () { sync(true); }, 1500); });
 }
-function msgName(kind, v) { return kind === 'balance' ? (v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update') : kind === 'receipt' ? 'Receipt' : kind === 'statement' ? 'Statement' : kind === 'log' ? 'Contact log summary' : 'Rent reminder'; }
+function msgName(kind, v) { return kind === 'balance' ? (v.L.yearBalance > 0 ? 'Payment reminder' : 'Balance update') : kind === 'receipt' ? 'Receipt' : kind === 'statement' ? 'Statement' : kind === 'log' ? 'Contact log summary' : kind === 'noreply' ? 'No-reply note' : 'Rent reminder'; }
 function openMsg(kind, pay) { T.msg = { kind: kind, pay: pay, arrears: !!T.S.settings.arrearsInMsg }; go('message'); }
 SCREENS.message = function () {
   var v = view(), M = T.msg, text, ph = waPhone_(v.D.tenancy.phone);
   if (M.kind === 'balance') {
     var pay = M.pay || v.D.payments.slice().sort(byDateDesc)[0] || null;
     text = balanceMessage_(v.D, v.L, pay, { arrears: M.arrears });
-  } else text = reminderMessage_(v.D, v.L, v.today);
-  return el('div', null, backBar(M.kind === 'balance' ? (view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance message') : 'Reminder text'),
+  } else if (M.kind === 'noreply') { var NR = noReplyInfo(v); if (!NR) { setTimeout(function () { go('home'); }, 0); return el('div'); } text = noReplyMessage(v, NR); }
+  else text = reminderMessage_(v.D, v.L, v.today);
+  return el('div', null, backBar(M.kind === 'noreply' ? 'No reply today' : M.kind === 'balance' ? (view().L.yearBalance > 0 ? 'Payment reminder' : 'Balance message') : 'Reminder text'),
     M.kind === 'balance' ? el('label', { class: 'switch', for: 'inclarr' }, el('span', { text: 'Include earlier arrears' }),
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
     el('div', { class: 'msg', id: 'msgtext' }, text.split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),

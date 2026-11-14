@@ -321,6 +321,31 @@ function applyChat(parsed, him) {
   S.outbox = S.outbox.concat(jobs);
   return saveState().then(function () { return { added: added, changed: changed, total: parsed.msgs.length, from: from }; });
 }
+// ---------- a day with no reply ----------
+// True only when the log (entries by hand and the imported chat) shows I contacted him today and he did not reply, answer or call.
+// The message states facts from the log and nothing else: no threat, nothing about family or health.
+function noReplyInfo(v) {
+  var lp = lastPayDate(v.D), from = lp && lp < v.today ? lp : addDaysYmd_(v.today, -30);
+  var R = contactStory_(v.D, from, v.today), q = R.days[v.today];
+  if (!q || !q.me || q.he) return null;
+  return { none: R.daysNone, of: R.daysMe, from: from, sincePay: from === lp };
+}
+function noReplyMessage(v, N) {
+  var since = N.sincePay ? 'since your last payment on ' + fmtDate_(N.from) : 'since ' + fmtDate_(N.from);
+  return wrapMsg_(v.D, [
+    'I contacted you today and have not had a reply.',
+    'I keep a dated record of every message and call about the rent. If I do not hear from you today, ' + fmtDate_(v.today) + ' goes into that record as another day without a response: ' +
+      (N.none === 1 ? 'the first' : 'day ' + N.none) + ' of the ' + N.of + ' days I have reached out ' + since + '.',
+    'I would much rather write that you replied. Kindly reply or call me back today.']);
+}
+function noReplyCard() {
+  var v = view(), N = noReplyInfo(v);
+  if (!N || v.D.logs.some(function (g) { return g.date === v.today && /^No-reply note sent/.test(g.notes || ''); })) return null; // already sent today
+  return el('button', { class: 'card flagcard', type: 'button', id: 'noreplycard', onclick: function () { openMsg('noreply'); } }, svg('msg'),
+    el('div', null, el('b', { text: 'No reply from him today' }),
+      el('div', { class: 'sm', text: 'Day ' + N.none + ' of ' + N.of + ' without a response. Send a note that today will be recorded.' })));
+}
+
 // ---------- one-tap import: the chat sent from the share sheet waits in the workbook; the phone fetches it after a sync ----------
 function himFor(P) { return (T.S.settings.wa && P.names.indexOf(T.S.settings.wa.him) >= 0 ? T.S.settings.wa.him : '') || guessTenant(P.names, view().D.tenancy.tenant); }
 function fetchDrop() {
@@ -336,7 +361,7 @@ function fetchDrop() {
     return applyChat(P, him).then(function (x) {
       S.data.chatDrop = '';
       return api({ op: 'chatdone', token: S.token }).catch(function () { }).then(function () {
-        toast('WhatsApp chat imported: ' + x.added + ' day(s) added, ' + x.changed + ' updated.'); render(); sync(true);
+        toast('WhatsApp chat imported: ' + x.added + ' day(s) added, ' + x.changed + ' updated.' + (noReplyInfo(view()) ? ' No reply from him today: see Home.' : '')); render(); sync(true);
       });
     });
   }).catch(function () { }).finally(function () { T.dropBusy = false; });
@@ -411,6 +436,7 @@ function openChatImport(pre) {
         chips(I.parsed.names, '', function (x) { I.him = x; finish(); }, 'chips-him')) : null,
       I.done || I.parsed ? null : el('label', { class: 'btn primary wide', for: 'chatfile' }, svg('doc'), el('span', { text: 'Choose the file' })),
       I.done || I.parsed ? null : el('input', { id: 'chatfile', type: 'file', accept: '.zip,.txt,application/zip,text/plain', class: 'hidefile', onchange: pick }),
+      I.done && noReplyInfo(view()) ? btn('primary wide', 'msg', 'No reply today: write him a note', function () { T.chat = null; T.sheet = null; openMsg('noreply'); }, 'chatnoreply') : null,
       el('div', { class: 'err', id: 'chaterr', text: I.err }),
       el('p', { class: 'hint', text: 'The chat is read on this phone. Only one line per day goes to the log: counts, missed calls and up to three of his messages, shortened.' }),
       I.done || I.parsed ? null : btn('wide', 'share', T.S.settings.dropUrl && view().D.chatDropOn ? 'One-tap import: address and steps' : 'Set up one-tap import', function () { T.chat = null; openDropSetup(); }, 'dropsetup'),
