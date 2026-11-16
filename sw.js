@@ -1,7 +1,7 @@
 /* 169-E Rent service worker: cache the app shell, never the data. */
-var BUILD = '2cb4e384';
+var BUILD = '51e74ef1';
 var CACHE = 'r169-' + BUILD;
-var FILES = ['./', 'index.html', 'app.css', 'app.js', 'logic.js', 'photos.js', 'draw.js', 'nudge.js', 'msgur.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'logo-160.png'];
+var FILES = ['./', 'index.html', 'app.css', 'app.js', 'logic.js', 'photos.js', 'draw.js', 'nudge.js', 'msgur.js', 'intel.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png', 'logo-160.png'];
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
     return Promise.all(FILES.map(function (f) { return fetch(f, { cache: 'reload' }).then(function (r) { if (!r.ok) throw new Error(f); return c.put(f, r); }); }));

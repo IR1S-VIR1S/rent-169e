@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '2cb4e384';
+var BUILD_ID = '51e74ef1';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -883,6 +883,7 @@ function sentSheet() {
     T.S.pendingSent = null; T.sheet = null;
     if (!yes) { saveState().then(function () { render(); toast('Not logged.'); }); return; }
     if (P.note && T.nudge) T.nudge.stage = 0;
+    if (P.draft && typeof draftDone === 'function') draftDone(P.draft, 'used');
     logSent(P.what, P.part, P).then(function () { render(); });
   }
   return el('div', { class: 'sheet-bg' },

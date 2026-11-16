@@ -72,6 +72,7 @@ function nudgeMessage(v, stage, K, F) {
     if (K.promise) b.push('On ' + fmtDate_(K.promise.on) + ' you told me it would be paid by ' + fmtDate_(K.promise.by) + '. That date has passed and nothing has arrived.');
     else b.push(state);
     if (silence) b.push(silence);
+    var ex2 = excuseLines(v, K, 'en'); if (ex2.length > 2) b.push('', ex2[0], ex2[ex2.length - 2]);
     b.push('', 'I have always taken you as a man whose word and action are the same.' + (days ? ' Today they are ' + days + ' apart.' : '') + ' Kindly close that gap today.',
       '', 'Please send it directly from your own account rather than through anyone else, so that nothing is delayed on the way.');
   } else if (stage === 3) {
@@ -82,6 +83,8 @@ function nudgeMessage(v, stage, K, F) {
     b.push('', 'Each late month' + (silence ? ' and each unanswered call' : '') + ' takes something away from that trust, and I do not want to lose it.',
       '', (K.overdue ? 'The balance of ' + rent + ' for ' + L.year + ' is ' + days + ' overdue. ' : '') + 'Kindly clear it today.');
   } else if (stage === 4) {
+    var ex = excuseLines(v, K, 'en');
+    if (ex.length) b.push.apply(b, ex.concat(['']));
     b.push('I have listened to every reason for delay with patience, and I do not question your difficulties.',
       '', 'But the reason changes every month and the result stays the same: the rent arrives late. The rent does not depend on how the month went. It is due on its date.',
       '', 'I am no longer able to accept an explanation in place of the payment. ' + (K.overdue ? rent + ' for ' + L.year + ', ' + days + ' overdue.' : state) + ' Kindly send it today.');
@@ -124,7 +127,8 @@ SCREENS.nudge = function () {
   var facts = [K.overdue ? daysText_(K.R.days) + ' overdue' : 'Nothing overdue today',
     K.C.unanswered ? plural_(K.C.unanswered, 'call') + ' not answered since ' + fmtDate_(K.from) : '',
     K.promise ? 'promised ' + fmtDate_(K.promise.by) + ', missed' : K.promiseOpen ? 'promise open until ' + fmtDate_(K.promiseOpen.by) : '',
-    K.lastStage ? 'last sent: approach ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : 'no follow-up sent yet'].filter(Boolean).join(' · ');
+    K.lastStage ? 'last sent: approach ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : 'no follow-up sent yet',
+    (function () { var lp = lastPayDate(v.D), E = excuses(v, lp && lp < v.today ? lp : K.from); return E.length ? plural_(E.length, 'reason') + ' given: ' + E.slice(0, 3).map(function (e) { return e.label; }).join(', ') : ''; })()].filter(Boolean).join(' · ');
   var own = Object.keys(factsOf()).length;
   function sent() { askSent('Follow-up message, approach ' + stage, 'text', false, 'Approach ' + stage + ' (' + info.name + ') sent on WhatsApp.'); }
   return el('div', null, backBar('Follow-up message'),
@@ -143,7 +147,9 @@ SCREENS.nudge = function () {
     el('p', { class: 'hint', text: 'When you come back, the app asks whether you sent it, and then records it in the contact log.' }),
     el('div', { class: 'actions2' },
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }, 'nudgecopy'),
-      btn('', 'doc', own ? 'Facts (your wording)' : 'Facts (ready-made)', openFacts, 'nudgefacts')));
+      btn('', 'doc', own ? 'Facts (your wording)' : 'Facts (ready-made)', openFacts, 'nudgefacts')),
+    el('h2', { text: 'Claude' }),
+    draftCard(v));
 };
 
 // ---------- WhatsApp call started from the app; the outcome is asked on the next opening ----------

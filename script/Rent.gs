@@ -3,8 +3,8 @@
  * Installed and updated by Loader.gs (menu "169-E Rent" > "Install update").
  * Never holds rent data: all data lives in the owner's Sheet and Drive.
  */
-var VERSION = '2.12';
-var RELEASE_NOTE = '2.12: clearer words when the one-tap import address is not the current one. Before that, 2.11: one-tap WhatsApp chat import: an Apple Shortcut in the iPhone share sheet sends the exported chat here, it waits in a private file until the phone reads it at the next sync, then it is deleted. Before that, 2.10: the salam comes first, then his name. Before that, 2.9: days overdue are counted from the due date of the oldest month of the year not yet fully paid (payments clear the oldest months first), so a small payment cannot reset them. Before that, 2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
+var VERSION = '2.13';
+var RELEASE_NOTE = '2.13: each one-tap import attempt is written to the LOG tab with its size and answer; new DRAFTS tab: messages drafted by Claude appear in the app under Follow-up message, ready to send. Before that, 2.12: clearer words when the one-tap import address is not the current one. Before that, 2.11: one-tap WhatsApp chat import: an Apple Shortcut in the iPhone share sheet sends the exported chat here, it waits in a private file until the phone reads it at the next sync, then it is deleted. Before that, 2.10: the salam comes first, then his name. Before that, 2.9: days overdue are counted from the due date of the oldest month of the year not yet fully paid (payments clear the oldest months first), so a small payment cannot reset them. Before that, 2.8: the English name line is left out when his name is on the Urdu salam line. Before that, 2.7: messages and pictures open with his name in Urdu on the same line as the salam. Before that, 2.6: calls within an hour of the first call count as one try; contact counts include the calls and messages read from his WhatsApp chat (each day counted once, so a call logged by hand and the same call in the chat are not counted twice). Before that, 2.5: updates now install themselves when the phone app asks (no visit to the Sheet); the earlier version is kept for Undo. Before that, 2.4: the log accepts two new kinds, Call not answered and WhatsApp chat (for calls started from the app and imported chats); days overdue move into the OVERDUE stamp. Before that, 2.3: rent reminder changes to OVERDUE with the number of days once the due date has passed; advance reminder when this month is paid. 2.2: tenant page loads with a plain web request (works in Safari and any browser); clearer errors.\n' +
   '2.1: tenant page (a private link for the tenant, this year only, no login); link on/off from the menu or the app; shows when he last opened it.\n' +
   '2.0: one-tap updates; Arabic greeting and closing, "Bhai"; rent due by the 3rd (late after the 10th); ' +
   'maintenance claims; contact log with red flags; EME visit timer; receipt photos saved in Drive; tenant WhatsApp number.\n' +
@@ -454,6 +454,7 @@ var TABS = {
   TENANCIES: ['tenancy_id', 'property_id', 'tenant', 'salutation', 'start', 'security', 'status', 'note', 'phone'],
   PROPERTIES: ['property_id', 'name', 'note'],
   NOTES: ['date', 'tenancy_id', 'note'],
+  DRAFTS: ['draft_id', 'made_at', 'lang', 'approach', 'text', 'why', 'status', 'used_at'],
   DELETED: ['deleted_at', 'reason', 'pay_id', 'tenancy_id', 'date', 'amount', 'received_into', 'paid_by', 'eur', 'note', 'req_id'],
   LOG: ['time', 'event', 'detail']
 };
@@ -745,8 +746,10 @@ function doPost(e) {
   var out;
   if (e && e.parameter && e.parameter.drop) { // the Apple Shortcut: plain words back, shown on the iPhone
     var msg;
-    try { msg = chatDrop_(String(e.parameter.drop), JSON.parse(e.postData.contents || '{}')); }
+    var size = e.postData && e.postData.contents ? e.postData.contents.length : 0;
+    try { msg = chatDrop_(String(e.parameter.drop), JSON.parse((e.postData && e.postData.contents) || '{}')); }
     catch (err) { msg = 'Not received: ' + String(err && err.message || err); }
+    try { log_('one-tap import attempt', Math.round(size / 1024) + ' KB sent; answer: ' + msg.slice(0, 120)); } catch (e2) { } // so a failed try can be traced in the LOG tab
     return ContentService.createTextOutput(msg);
   }
   try { out = api_(JSON.parse(e.postData.contents)); }
@@ -767,6 +770,9 @@ function api_(b) {
   if (b.op === 'pull') {
     var D = loadData_(); D.today = today_(); D.version = VERSION;
     D.tenantLink = tenantLink_(); D.tenantLastView = props.getProperty('TENANT_LAST_VIEW') || '';
+    D.sheetId = SpreadsheetApp.getActiveSpreadsheet().getId();
+    D.drafts = readRows_('DRAFTS').filter(function (d) { return d.text && d.status !== 'used' && d.status !== 'dismissed'; })
+      .map(function (d) { return { draft_id: String(d.draft_id || 'row' + d._row), made_at: String(d.made_at), lang: d.lang, approach: d.approach, text: String(d.text), why: d.why }; }).reverse();
     var cd = props.getProperty('CHATDROP_FILE'); D.chatDrop = cd ? JSON.parse(cd).at : ''; D.chatDropOn = !!props.getProperty('CHATDROP');
     return { ok: true, data: D };
   }
@@ -855,6 +861,11 @@ function pushOne_(it, tid, today, stamp, ten) {
   if (!it || !it.req_id) return { ok: false, error: 'Missing request id.' };
   var e, rows, cur;
   switch (it.op) {
+    case 'draftdone': // a Claude draft was sent (used) or dismissed: it stops showing in the app
+      rows = readRows_('DRAFTS');
+      cur = rows.filter(function (d) { return String(d.draft_id || 'row' + d._row) === String(it.id); })[0];
+      if (cur) { cur.status = it.status === 'used' ? 'used' : 'dismissed'; cur.used_at = stamp; writeRow_('DRAFTS', cur._row, cur); }
+      return { ok: true, dup: true };
     case 'pay':
       rows = readRows_('PAYMENTS');
       cur = rows.filter(function (p) { return p.req_id === it.req_id; })[0];
