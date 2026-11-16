@@ -4,12 +4,26 @@
 // ---------- facts the owner types once (kept on this phone only, never in the published files) ----------
 var FACT_KEYS = ['commitment', 'trust', 'consequence'];
 var FACT_HELP = 'commitment: what he promised you, in one sentence\ntrust: one sentence about trust (for example the meaning of his name)\nconsequence: what you will really do if the year is not cleared, with the date';
-function factsOf() {
+// Ready-made wording for the three facts, built from the ledger, so nothing has to be typed. A line the owner types
+// replaces the ready-made one. Kept general: no family, health or legal wording.
+function factDefaults(v, lang) {
+  var y = v.L.year, name = String(v.D.tenancy.tenant || ''), amanat = /amanat/i.test(name), ur = lang !== 'en';
+  return {
+    commitment: ur ? 'آپ نے وعدہ کیا تھا کہ ' + y + ' سے کرایہ پورا اور وقت پر ادا ہوگا۔' : 'You gave me your word that from ' + y + ' the rent would be paid in full and on time.',
+    trust: amanat ? (ur ? 'آپ کے نام میں امانت کا لفظ ہے، یعنی کسی کی چیز جو بھروسے پر سونپی جائے۔ میں نے یہ گھر ہمیشہ اسی نظر سے آپ کے حوالے سمجھا ہے۔'
+      : 'Your name carries the word Amanat: something placed in your hands on trust. That is how I have always thought of this house in your care.')
+      : (ur ? 'یہ گھر بھروسے پر آپ کے حوالے ہے، اور بھروسا وقت پر ادائیگی سے قائم رہتا ہے۔' : 'This house is in your care on trust, and trust is kept by paying on time.'),
+    consequence: ur ? 'اگر ' + y + ' کا بقایا 31 دسمبر ' + y + ' تک ادا نہ ہوا تو میں گھر کا اوپر والا حصہ الگ کرایہ دار کو دے دوں گا۔ آپ کے پاس گراؤنڈ فلور اور تہہ خانے کا ایک سرونٹ روم رہے گا۔'
+      : 'If the balance for ' + y + ' is not cleared by 31 December ' + y + ', I will let the upper portion of the house to a separate tenant. You would keep the ground floor and one basement servant room.'
+  };
+}
+function factsOf(v, lang) {
   var out = {};
   String((T.S.settings && T.S.settings.facts) || '').split('\n').forEach(function (l) {
     var m = /^\s*([a-z_]+)\s*:\s*(.+)$/i.exec(l);
     if (m && FACT_KEYS.indexOf(m[1].toLowerCase()) >= 0) out[m[1].toLowerCase()] = m[2].trim();
   });
+  if (v) { var d = factDefaults(v, lang); FACT_KEYS.forEach(function (k) { if (!out[k]) out[k] = d[k]; }); }
   return out;
 }
 
@@ -97,20 +111,21 @@ function openFacts() {
   sheetOpen(function () {
     return sheetWrap('Message facts', [
       el('h2', { text: 'Facts used in the messages' }),
-      el('p', { class: 'muted', text: 'One per line. Kept on this phone only. A line left out is simply not used.' }),
+      el('p', { class: 'muted', text: 'Nothing has to be typed: the app writes these three from your ledger, shown below. To use your own wording for one, type it here as label: text. Kept on this phone only.' }),
+      el('div', { class: 'card', id: 'factsready' }, FACT_KEYS.map(function (k) { return el('div', { class: 'row' }, el('b', { text: k }), el('div', { class: 'grow sm', dir: 'auto', text: factDefaults(view(), msgLang())[k] })); })),
       ta = el('textarea', { id: 'factsbox', rows: '9', placeholder: FACT_HELP }, T.S.settings.facts || ''),
       btn('primary wide', 'check', 'Save', function () { saveFacts(ta.value).then(function () { T.sheet = null; render(); toast('Saved.'); }); }, 'factssave'),
       btn('wide', 'x', 'Close', sheetClose)]);
   });
 }
 SCREENS.nudge = function () {
-  var v = view(), K = nudgeCues(v), F = factsOf(), N = T.nudge || (T.nudge = { stage: 0 }), ph = waPhone_(v.D.tenancy.phone);
+  var v = view(), K = nudgeCues(v), F = factsOf(v, msgLang()), N = T.nudge || (T.nudge = { stage: 0 }), ph = waPhone_(v.D.tenancy.phone);
   var stage = N.stage || K.next, info = NUDGES[stage - 1], text = draftNudge(v, stage, K, F);
   var facts = [K.overdue ? daysText_(K.R.days) + ' overdue' : 'Nothing overdue today',
     K.C.unanswered ? plural_(K.C.unanswered, 'call') + ' not answered since ' + fmtDate_(K.from) : '',
     K.promise ? 'promised ' + fmtDate_(K.promise.by) + ', missed' : K.promiseOpen ? 'promise open until ' + fmtDate_(K.promiseOpen.by) : '',
     K.lastStage ? 'last sent: approach ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : 'no follow-up sent yet'].filter(Boolean).join(' · ');
-  var missing = FACT_KEYS.filter(function (k) { return !F[k]; });
+  var own = Object.keys(factsOf()).length;
   function sent() { askSent('Follow-up message, approach ' + stage, 'text', false, 'Approach ' + stage + ' (' + info.name + ') sent on WhatsApp.'); }
   return el('div', null, backBar('Follow-up message'),
     el('div', { class: 'note', id: 'nudgecues', text: facts }),
@@ -128,7 +143,7 @@ SCREENS.nudge = function () {
     el('p', { class: 'hint', text: 'When you come back, the app asks whether you sent it, and then records it in the contact log.' }),
     el('div', { class: 'actions2' },
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }, 'nudgecopy'),
-      btn('', 'doc', 'Facts' + (missing.length ? ' (' + missing.length + ' missing)' : ''), openFacts, 'nudgefacts')));
+      btn('', 'doc', own ? 'Facts (your wording)' : 'Facts (ready-made)', openFacts, 'nudgefacts')));
 };
 
 // ---------- WhatsApp call started from the app; the outcome is asked on the next opening ----------
