@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'a6283564';
+var BUILD_ID = 'd87e1d2a';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
