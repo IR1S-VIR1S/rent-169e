@@ -42,10 +42,11 @@ function nudgeCues(v) {
 function plural_(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 function nudgeMessage(v, stage, K, F) {
   var D = v.D, L = v.L, R = K.R, b = [];
-  var rent = fmtRs_(R ? R.unpaid || R.rent : Math.max(L.yearBalance, 0)), month = R ? monthName_(R.month) : String(L.year);
+  // the amount asked for is always the year's balance, the same figure as on the payment reminder, never one month's rent
+  var rent = fmtRs_(Math.max(L.yearBalance, 0)), month = R ? monthName_(R.month) : String(L.year);
   var days = R && K.overdue ? daysText_(R.days) : '', due = R ? fmtDate_(R.due) : '';
   var state = K.overdue && R.since ? 'Rent has been unpaid since ' + monthName_(R.since) + ' (due ' + fmtDate_(R.sinceDue) + '), now ' + days + ' overdue. The balance for ' + L.year + ' stands at ' + fmtRs_(Math.max(L.yearBalance, 0)) + '.'
-    : K.overdue ? 'Rent of ' + rent + ' for ' + month + ' was due on ' + due + ' and is now ' + days + ' overdue.'
+    : K.overdue ? 'The balance for ' + L.year + ' stands at ' + rent + '. Rent for ' + month + ' was due on ' + due + ' and is now ' + days + ' overdue.'
     : 'The balance for ' + L.year + ' stands at ' + fmtRs_(Math.max(L.yearBalance, 0)) + '.';
   var silence = K.C.unanswered > 0 ? 'Since ' + fmtDate_(K.from) + ' I have called ' + plural_(K.C.unanswered, 'time') + ' without an answer.'
     : K.waUnanswered ? 'My last ' + plural_(K.waUnanswered.mineAfter, 'message') + ' here since ' + fmtDate_(K.waUnanswered.hisLast) + ' have had no reply.' : '';
@@ -65,15 +66,15 @@ function nudgeMessage(v, stage, K, F) {
       : 'For us this was never only about rent. It has been a relationship of trust.');
     if (F.trust) b.push('', F.trust);
     b.push('', 'Each late month' + (silence ? ' and each unanswered call' : '') + ' takes something away from that trust, and I do not want to lose it.',
-      '', (K.overdue ? month + ' rent of ' + rent + ' is ' + days + ' overdue. ' : '') + 'Kindly clear it today.');
+      '', (K.overdue ? 'The balance of ' + rent + ' for ' + L.year + ' is ' + days + ' overdue. ' : '') + 'Kindly clear it today.');
   } else if (stage === 4) {
     b.push('I have listened to every reason for delay with patience, and I do not question your difficulties.',
       '', 'But the reason changes every month and the result stays the same: the rent arrives late. The rent does not depend on how the month went. It is due on its date.',
-      '', 'I am no longer able to accept an explanation in place of the payment. ' + (K.overdue ? rent + ' for ' + month + ', ' + days + ' overdue.' : state) + ' Kindly send it today.');
+      '', 'I am no longer able to accept an explanation in place of the payment. ' + (K.overdue ? rent + ' for ' + L.year + ', ' + days + ' overdue.' : state) + ' Kindly send it today.');
   } else if (stage === 5) {
     var dl = addDaysYmd_(v.today, 2);
     b.push(state, '', 'I need one of two things from you by 8 pm Pakistan time on ' + fmtDate_(dl) + ':',
-      '1. The full ' + rent + ' in the account, with the screenshot here, or',
+      '1. The full balance of ' + rent + ' in the account, with the screenshot here, or',
       '2. A written message from you here with the exact date and the exact amount you will pay.',
       '', 'Kindly do not send it through anyone else. If I receive neither, I will take it that there is no commitment from your side and decide accordingly.');
   } else {

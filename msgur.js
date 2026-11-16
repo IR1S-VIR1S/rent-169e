@@ -50,10 +50,10 @@ function reminderMessageUr(D, L, today, opts) {
 
 function nudgeMessageUr(v, stage, K, F) {
   var D = v.D, L = v.L, R = K.R, b = [], bal = urRs(Math.max(L.yearBalance, 0));
-  var rent = urRs(R ? R.unpaid || R.rent : Math.max(L.yearBalance, 0)), month = R ? urMonth(R.month) : String(L.year);
+  var rent = bal, month = R ? urMonth(R.month) : String(L.year); // always the year's balance, as on the payment reminder
   var days = R && K.overdue ? urDays(R.days) : '', due = R ? urDate(R.due) : '';
   var state = K.overdue && R.since ? urMonth(R.since) + ' سے کرایہ ادا نہیں ہوا (آخری تاریخ ' + urDate(R.sinceDue) + ')، اب ' + days + ' کی تاخیر ہو چکی ہے۔ ' + L.year + ' کا بقایا ' + bal + ' ہے۔'
-    : K.overdue ? month + ' کا ' + rent + ' کرایہ ' + due + ' کو واجب تھا اور اب ' + days + ' کی تاخیر ہو چکی ہے۔'
+    : K.overdue ? L.year + ' کا بقایا ' + bal + ' ہے۔ ' + month + ' کا کرایہ ' + due + ' کو واجب تھا اور اب ' + days + ' کی تاخیر ہو چکی ہے۔'
     : L.year + ' کا بقایا ' + bal + ' ہے۔';
   var silence = K.C.unanswered > 0 ? urDate(K.from) + ' سے میں نے ' + K.C.unanswered + ' بار کال کی مگر جواب نہیں ملا۔'
     : K.waUnanswered ? urDate(K.waUnanswered.hisLast) + ' سے یہاں میرے آخری ' + K.waUnanswered.mineAfter + ' پیغامات کا کوئی جواب نہیں آیا۔' : '';
@@ -72,15 +72,15 @@ function nudgeMessageUr(v, stage, K, F) {
     b.push((K.since ? 'آپ ' + K.since + ' سے ہمارے گھر میں ہیں' + (yrs > 1 ? '، یعنی ' + yrs + ' سال' : '') + '۔ ' : '') + 'ہمارے لیے یہ کبھی صرف کرائے کا معاملہ نہیں رہا، یہ اعتماد کا رشتہ رہا ہے۔');
     if (F.trust) b.push('', F.trust);
     b.push('', 'ہر تاخیر والا مہینہ' + (silence ? ' اور ہر بے جواب کال' : '') + ' اس اعتماد کو کم کرتا ہے، اور میں اسے کھونا نہیں چاہتا۔',
-      '', (K.overdue ? month + ' کا ' + rent + ' کرایہ ' + days + ' سے واجب الادا ہے۔ ' : '') + 'براہِ کرم آج ہی ادا کر دیں۔');
+      '', (K.overdue ? L.year + ' کا ' + rent + ' بقایا ' + days + ' سے واجب الادا ہے۔ ' : '') + 'براہِ کرم آج ہی ادا کر دیں۔');
   } else if (stage === 4) {
     b.push('میں نے تاخیر کی ہر وجہ صبر سے سنی ہے، اور آپ کی مشکلات پر سوال نہیں اٹھاتا۔',
       '', 'لیکن وجہ ہر مہینے بدل جاتی ہے اور نتیجہ وہی رہتا ہے: کرایہ دیر سے آتا ہے۔ کرایہ اس بات پر منحصر نہیں کہ مہینہ کیسا گزرا، یہ اپنی تاریخ پر واجب ہوتا ہے۔',
-      '', 'اب میں ادائیگی کی جگہ وضاحت قبول نہیں کر سکتا۔ ' + (K.overdue ? month + ' کے ' + rent + '، ' + days + ' کی تاخیر۔' : state) + ' براہِ کرم آج ہی بھیج دیں۔');
+      '', 'اب میں ادائیگی کی جگہ وضاحت قبول نہیں کر سکتا۔ ' + (K.overdue ? L.year + ' کا بقایا ' + rent + '، ' + days + ' کی تاخیر۔' : state) + ' براہِ کرم آج ہی بھیج دیں۔');
   } else if (stage === 5) {
     var dl = addDaysYmd_(v.today, 2);
     b.push(state, '', urDate(dl) + ' کو پاکستانی وقت کے مطابق رات 8 بجے تک مجھے آپ کی طرف سے ان دو میں سے ایک چیز چاہیے:',
-      '1. پورے ' + rent + ' اکاؤنٹ میں، اور اس کا اسکرین شاٹ یہاں، یا',
+      '1. پورا بقایا ' + rent + ' اکاؤنٹ میں، اور اس کا اسکرین شاٹ یہاں، یا',
       '2. یہاں آپ کا تحریری پیغام، جس میں ادائیگی کی صحیح تاریخ اور صحیح رقم لکھی ہو۔',
       '', 'براہِ کرم کسی اور کے ذریعے نہ بھیجیں۔ اگر مجھے ان میں سے کچھ بھی نہ ملا تو میں سمجھوں گا کہ آپ کی طرف سے کوئی وعدہ نہیں، اور اسی کے مطابق فیصلہ کروں گا۔');
   } else {
