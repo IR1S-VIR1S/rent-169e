@@ -131,6 +131,11 @@ img.biglogo { width: 112px; height: 112px; border-radius: 26px; display: block; 
 .tile.sand { background: var(--sand); color: var(--sand-text); border-color: transparent; }
 .tile.red { background: var(--nil-tint); color: var(--nil-tint-text); border-color: transparent; }
 .tiles.six .tile { min-height: 88px; padding: 12px 10px; }
+.tiles.six.four { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.tiles.six.four .tile { padding: 10px 7px; min-height: 92px; }
+.tiles.six.four .tile svg { width: 22px; height: 22px; margin-bottom: 2px; }
+.tiles.six.four .tile b { font-size: 13px; }
+.tiles.six.four .tile span { font-size: 11px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--grey-tint); border-radius: 14px; padding: 4px; gap: 4px; margin-bottom: 8px; }
 .seg button { appearance: none; border: 0; background: none; color: var(--grey-text); font: inherit; font-weight: 700; border-radius: 10px; min-height: 44px;
   display: flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }

@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'bd00203f';
+var BUILD_ID = 'b29b8856';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -524,17 +524,20 @@ SCREENS.home = function () {
     el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
     (function () {
       var K = nudgeCues(v), NR = noReplyInfo(v), nrSent = D.logs.some(function (g) { return g.date === v.today && /^No-reply note sent/.test(g.notes || ''); });
-      var follow = tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', (v.D.drafts || []).some(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; }) ? 'Draft from Claude ready' : K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge');
+      var ready = (v.D.drafts || []).some(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; });
+      var follow = tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', ready ? 'Draft from Claude ready' : K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge');
       var third = NR && !nrSent ? tile('red', 'msg', 'No reply from him today', 'Day ' + NR.none + ' of ' + NR.of + ' · send a note', function () { openMsg('noreply'); }, 'b-noreply') : follow;
+      // A follow-up message ready to send always sits in the first row: with the no-reply tile there too, the row has four.
+      var fourth = ready && third !== follow ? follow : null;
       var more = [tile('sand', 'bell', 'Rent reminder', "This month's rent", function () { openImg('reminder'); }, 'b-remind'),
         tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),
         tile('sand', 'pays', 'Receipt', 'Latest payment', function () { if (recent[0]) openImg('receipt', recent[0]); else toast('No payments yet.'); }, 'b-receipt')];
-      if (third !== follow) more.push(follow);
+      if (third !== follow && !fourth) more.push(follow);
       return el('div', null,
-        el('div', { class: 'tiles six' },
+        el('div', { class: 'tiles six' + (fourth ? ' four' : ''), id: 'sendrow' },
           tile('sand', 'msg', L.yearBalance > 0 ? 'Payment reminder' : 'Balance update', "Year's balance", function () { openImg('balance', null); }, 'b-balance'),
           tile('sand', 'callout', 'Call on WhatsApp', T.S.pendingCall ? 'Outcome to fill in' : 'Logged automatically', startCall, 'b-call'),
-          third),
+          third, fourth),
         el('button', { class: 'fold', type: 'button', id: 'moresend', 'aria-expanded': T.moreSend ? 'true' : 'false', onclick: function () { T.moreSend = !T.moreSend; render(); } },
           T.moreSend ? 'Fewer' : 'More to send (' + more.length + ')'),
         T.moreSend ? el('div', { class: 'tiles six', id: 'moretiles' }, more) : null);
