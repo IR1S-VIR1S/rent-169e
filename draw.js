@@ -335,7 +335,9 @@ function contactStory_(D, from, to) {
   (D.logs || []).forEach(function (g) {
     if (g.date < from || g.date > to) return;
     var x = d(g.date);
-    if (g.kind === 'call') { x.mCalls++; x.mAns++; }
+    // A call started from the app is logged at once with 'Outcome not filled in yet': it is a call made, not one
+    // he answered, so the day stays amber (contacted, no response) until the outcome says 'We spoke'.
+    if (g.kind === 'call') { x.mCalls++; if (!/Outcome not filled in yet/i.test(String(g.notes || ''))) x.mAns++; }
     else if (g.kind === 'no_answer') x.mCalls++;
     else if (g.kind === 'message') x.mMsg++;
     else if (g.kind === 'called_back') x.mHe++;
