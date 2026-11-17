@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = 'd87e1d2a';
+var BUILD_ID = '27a59715';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -864,10 +864,23 @@ function openLogSheet(it) {
 }
 
 // ---------- messages ----------
-function waLink(text) {
-  var ph = waPhone_(view().D.tenancy.phone);
-  return 'https://wa.me/' + (ph || '') + '?text=' + encodeURIComponent(text);
+// Opened from the Home Screen app, a wa.me link goes through a Safari page that stays behind as a blank white
+// sheet after WhatsApp opens (it had to be closed by hand on coming back). The whatsapp:// address opens
+// WhatsApp directly, with nothing left behind. In a normal browser tab wa.me is kept (it also works without WhatsApp).
+function isHomeApp() { return window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone)').matches); }
+function waUrl(ph, text) {
+  var t = text === undefined || text === null ? '' : String(text);
+  if (isHomeApp()) {
+    var q = [];
+    if (ph) q.push('phone=' + ph);
+    if (t) q.push('text=' + encodeURIComponent(t));
+    return 'whatsapp://send' + (q.length ? '?' + q.join('&') : '');
+  }
+  return 'https://wa.me/' + (ph || '') + (t ? '?text=' + encodeURIComponent(t) : '');
 }
+function waTarget() { return isHomeApp() ? null : '_blank'; }
+function waGo(ph, text) { if (isHomeApp()) location.href = waUrl(ph, text); else window.open(waUrl(ph, text), '_blank', 'noopener'); }
+function waLink(text) { return waUrl(waPhone_(view().D.tenancy.phone), text); }
 // Sending from the app: when you come back from WhatsApp the app asks "Did you send it?" and logs it only on Yes.
 // A picture and its matching text, confirmed within 10 minutes of each other, are one entry ("picture and text").
 // Copy is not asked about: the app cannot tell where it goes.
@@ -922,7 +935,7 @@ SCREENS.message = function () {
       el('input', { id: 'inclarr', type: 'checkbox', checked: M.arrears, onchange: function (e) { M.arrears = e.target.checked; render(); } })) : null,
     langChips(),
     msgBox(text, 'msgtext'),
-    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
+    el('a', { class: 'btn primary wide wa', id: 'wa', href: waLink(text), target: waTarget(), rel: 'noopener', onclick: function () { askSent(msgName(M.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Open ' + (v.D.tenancy.tenant || 'his') + "'s WhatsApp chat" : 'Open WhatsApp' })),
     ph ? null : el('p', { class: 'hint', text: 'Add his WhatsApp number in Settings to open his chat directly.' }),
     el('div', { class: 'actions2' },
@@ -982,7 +995,7 @@ SCREENS.image = function () {
     el('p', { class: 'hint', text: 'Choose WhatsApp, then ' + (v.D.tenancy.tenant || 'his chat') + '. ' + (caption ? 'Then send the matching text below.' : '') }),
     caption ? langChips() : null,
     caption ? msgBox(caption, 'captext') : null,
-    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: '_blank', rel: 'noopener', onclick: function () { askSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
+    caption ? el('a', { class: 'btn wide wa', id: 'wa', href: waLink(caption), target: waTarget(), rel: 'noopener', onclick: function () { askSent(msgName(I.kind, v), 'text'); } }, svg('wa'),
       el('span', { text: ph ? 'Send the text in his chat' : 'Send the text on WhatsApp' })) : null,
     img);
 };
@@ -1060,8 +1073,8 @@ function tenantCard() {
       el('span', { class: 'chip ' + (link ? 'ok' : 'wait'), text: link ? 'On' : 'Off' })),
     el('p', { class: 'hint', text: 'A private link he can open without any login. It shows only this year: rent, payments, receipts and maintenance.' }),
     link ? el('div', null,
-      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: '_blank', rel: 'noopener', onclick: function () { askSent('Link to his rent page', 'text'); },
-        href: 'https://wa.me/' + (waPhone_(D.tenancy && D.tenancy.phone) || '') + '?text=' + encodeURIComponent(draftLink(D, link)) }, svg('wa'), el('span', { text: 'Send him the link' })),
+      el('a', { class: 'btn primary wide wa', id: 'sendlink', target: waTarget(), rel: 'noopener', onclick: function () { askSent('Link to his rent page', 'text'); },
+        href: waUrl(waPhone_(D.tenancy && D.tenancy.phone), draftLink(D, link)) }, svg('wa'), el('span', { text: 'Send him the link' })),
       el('div', { class: 'actions2' },
         btn('', 'copy', 'Copy link', function () { navigator.clipboard.writeText(link).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }),
         btn('', 'link', 'Open it', function () { window.open(link, '_blank'); })),

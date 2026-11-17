@@ -142,7 +142,7 @@ SCREENS.nudge = function () {
     el('p', { class: 'hint', id: 'nudgeaim', text: info.aim + '. Each approach is a different angle, not a louder version of the last.' }),
     langChips(),
     msgBox(text, 'nudgetext'),
-    el('a', { class: 'btn primary wide wa', id: 'nudgewa', href: waLink(text), target: '_blank', rel: 'noopener', onclick: sent }, svg('wa'),
+    el('a', { class: 'btn primary wide wa', id: 'nudgewa', href: waLink(text), target: waTarget(), rel: 'noopener', onclick: sent }, svg('wa'),
       el('span', { text: ph ? 'Send in his WhatsApp chat' : 'Open WhatsApp' })),
     el('p', { class: 'hint', text: 'When you come back, the app asks whether you sent it, and then records it in the contact log.' }),
     el('div', { class: 'actions2' },
@@ -158,7 +158,7 @@ function startCall() {
   if (!ph) { toast('Add his WhatsApp number in Settings first.'); return; }
   if (S.pendingCall) { render(); return; }
   var n = nowPk(), key = uuid();
-  window.open('https://wa.me/' + ph, '_blank', 'noopener');
+  waGo(ph);
   S.pendingCall = { key: key, date: n.date, time: n.time, at: Date.now() };
   queue({ op: 'log', req_id: key, key: key, date: n.date, time: n.time, kind: 'call', flag: '', notes: 'WhatsApp call started from the app. Outcome not filled in yet.' })
     .then(function () { sync(true); });

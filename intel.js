@@ -85,7 +85,7 @@ function draftCard(v) {
         d.why ? el('p', { class: 'sm', text: d.why }) : null,
         el('div', { class: 'msg' + (ur ? ' ur' : ''), lang: ur ? 'ur' : null }, String(d.text).split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
         el('div', { class: 'actions2' },
-          el('a', { class: 'btn primary wa', href: waLink(d.text), target: '_blank', rel: 'noopener', id: 'draftsend', onclick: function () {
+          el('a', { class: 'btn primary wa', href: waLink(d.text), target: waTarget(), rel: 'noopener', id: 'draftsend', onclick: function () {
             askSent('Draft from Claude', 'text', false, 'Claude draft' + (d.approach ? ' (' + d.approach + ')' : '') + ' sent on WhatsApp.');
             T.S.pendingSent.draft = d.draft_id; saveState();
           } }, svg('wa'), el('span', { text: 'Send' })),
