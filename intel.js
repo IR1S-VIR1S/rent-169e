@@ -55,7 +55,7 @@ function claudeBrief(v) {
   return [
     'Draft the next WhatsApp message to my tenant for the 169-E Rent app. Write it in Urdu (Urdu script), unless I say otherwise.',
     'Escalation ladder (one step at a time, each step firmer than the last; the app suggests the step after the last one sent):',
-    NUDGES.map(function (x) { return '  ' + x.n + '. ' + x.name + ': ' + x.aim + (x.n === K.next ? '   <- write this step' : x.n <= K.lastStage ? '   (sent)' : ''); }).join('\n'),
+    NUDGES.map(function (x) { return '  ' + x.n + '. ' + x.name + ': ' + x.aim + (x.n === K.next ? '   <- write this step' : x.n <= K.lastStage ? '   (earlier step)' : ''); }).join('\n'),
     'Write step ' + K.next + ' (' + NUDGES[K.next - 1].name + ') only' + (K.lastStage ? '; the last step sent was ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : '') + '. It must not repeat the wording or angle of the messages already sent.',
     'Rules: polite and firm; use only the facts below; do not mention illness, his wife or children; no threats, no harassment, no legal claims; the only consequence that may be stated is the plan below; no em dashes. Start with: ' + salamLine_(v.D) + ' and end with: ' + CFG.JAZAK + '.',
     '',
