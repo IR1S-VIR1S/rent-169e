@@ -131,7 +131,10 @@ SCREENS.nudge = function () {
     (function () { var lp = lastPayDate(v.D), E = excuses(v, lp && lp < v.today ? lp : K.from); return E.length ? plural_(E.length, 'reason') + ' given: ' + E.slice(0, 3).map(function (e) { return e.label; }).join(', ') : ''; })()].filter(Boolean).join(' · ');
   var own = Object.keys(factsOf()).length;
   function sent() { askSent('Follow-up message, approach ' + stage, 'text', false, 'Approach ' + stage + ' (' + info.name + ') sent on WhatsApp.'); }
+  var drafts = (v.D.drafts || []).filter(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; }).length;
   return el('div', null, backBar('Follow-up message'),
+    drafts ? el('h2', { text: 'Ready from Claude' }) : null,
+    drafts ? draftCard(v) : null,
     el('div', { class: 'note', id: 'nudgecues', text: facts }),
     K.promiseOpen ? el('p', { class: 'hint', text: 'He has a promise still running. Consider waiting until ' + fmtDate_(K.promiseOpen.by) + '.' }) : null,
     el('label', { class: 'f', text: 'Approach' }),
@@ -148,8 +151,8 @@ SCREENS.nudge = function () {
     el('div', { class: 'actions2' },
       btn('', 'copy', 'Copy', function () { navigator.clipboard.writeText(text).then(function () { toast('Copied.'); }, function () { toast('Could not copy.'); }); }, 'nudgecopy'),
       btn('', 'doc', own ? 'Facts (your wording)' : 'Facts (ready-made)', openFacts, 'nudgefacts')),
-    el('h2', { text: 'Claude' }),
-    draftCard(v));
+    drafts ? null : el('h2', { text: 'Claude' }),
+    drafts ? null : draftCard(v));
 };
 
 // ---------- WhatsApp call started from the app; the outcome is asked on the next opening ----------

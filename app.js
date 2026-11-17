@@ -1,6 +1,6 @@
 /* 169-E Rent: offline iPhone app. Rules come from logic.js (generated from the sheet script). */
 'use strict';
-var BUILD_ID = '6806192b';
+var BUILD_ID = '88a2f098';
 var STORE = 'r169.v1';
 var IDLE_MS = 5 * 60 * 1000;
 
@@ -524,7 +524,7 @@ SCREENS.home = function () {
     el('h2', { text: 'Send to ' + (D.tenancy.tenant || 'tenant') }),
     (function () {
       var K = nudgeCues(v), NR = noReplyInfo(v), nrSent = D.logs.some(function (g) { return g.date === v.today && /^No-reply note sent/.test(g.notes || ''); });
-      var follow = tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge');
+      var follow = tile(K.overdue ? 'red' : 'sand', 'flag', 'Follow-up message', (v.D.drafts || []).some(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; }) ? 'Draft from Claude ready' : K.overdue ? daysText_(K.R.days) + ' overdue · approach ' + K.next : 'Six approaches', openNudge, 'b-nudge');
       var third = NR && !nrSent ? tile('red', 'msg', 'No reply from him today', 'Day ' + NR.none + ' of ' + NR.of + ' · send a note', function () { openMsg('noreply'); }, 'b-noreply') : follow;
       var more = [tile('sand', 'bell', 'Rent reminder', "This month's rent", function () { openImg('reminder'); }, 'b-remind'),
         tile('sand', 'doc', 'Statement', 'Picture of ' + yr, function () { openImg('statement'); }, 'b-stmt'),

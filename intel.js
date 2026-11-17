@@ -54,7 +54,10 @@ function claudeBrief(v) {
   var calls = v.D.logs.filter(function (g) { return (g.kind === 'call' || g.kind === 'called_back') && g.date >= from && g.notes; }).sort(byDateDesc).slice(0, 5);
   return [
     'Draft the next WhatsApp message to my tenant for the 169-E Rent app. Write it in Urdu (Urdu script), unless I say otherwise.',
-    'Rules: polite and firm; a different angle from the messages already sent; use only the facts below; do not mention illness, his wife or children; no threats, no harassment, no legal claims; no em dashes. Start with: ' + salamLine_(v.D) + ' and end with: ' + CFG.JAZAK + '.',
+    'Escalation ladder (one step at a time, each step firmer than the last; the app suggests the step after the last one sent):',
+    NUDGES.map(function (x) { return '  ' + x.n + '. ' + x.name + ': ' + x.aim + (x.n === K.next ? '   <- write this step' : x.n <= K.lastStage ? '   (sent)' : ''); }).join('\n'),
+    'Write step ' + K.next + ' (' + NUDGES[K.next - 1].name + ') only' + (K.lastStage ? '; the last step sent was ' + K.lastStage + ' on ' + fmtDate_(K.lastDate) : '') + '. It must not repeat the wording or angle of the messages already sent.',
+    'Rules: polite and firm; use only the facts below; do not mention illness, his wife or children; no threats, no harassment, no legal claims; the only consequence that may be stated is the plan below; no em dashes. Start with: ' + salamLine_(v.D) + ' and end with: ' + CFG.JAZAK + '.',
     '',
     'Facts as of ' + fmtDate_(v.today) + ':',
     '- Balance for ' + L.year + ': ' + fmtRs_(Math.max(L.yearBalance, 0)) + (K.overdue ? ', ' + daysText_(K.R.days) + ' overdue (oldest unpaid month ' + monthName_(K.R.since || K.R.month) + ')' : ''),
@@ -67,7 +70,7 @@ function claudeBrief(v) {
     sent.length ? '- Messages already sent:\n' + sent.map(function (g) { return '  ' + fmtDate_(g.date) + ': ' + g.notes; }).join('\n') : '',
     '- Plan if the year is not cleared (may be stated, nothing harsher): ' + factDefaults(v, 'en').consequence,
     '',
-    'Then save the draft in my Google Sheet (id ' + (v.D.sheetId || 'see the 169-E Rent workbook') + '), tab DRAFTS, as a new row: draft_id (D + date and time), made_at (now), lang (ur or en), approach (one or two words), text (the whole message), why (one line on the angle), status = new. The app shows it under Follow-up message, ready to send.'
+    'Then save the draft in my Google Sheet (id ' + (v.D.sheetId || 'see the 169-E Rent workbook') + '), tab DRAFTS, as a new row: draft_id (D + date and time), made_at (now), lang (ur or en), text (the whole message), why (one line on the angle), approach exactly "Approach ' + K.next + ' (' + NUDGES[K.next - 1].name + ')", status = new. Save it there only: I send every message from the app so that it is logged, so do not ask me to copy it from the chat. The app shows it at the top of Follow-up message, ready to send.'
   ].filter(function (x) { return x !== ''; }).join('\n');
 }
 function askClaude() {
@@ -76,7 +79,9 @@ function askClaude() {
   window.open('https://claude.ai/new?q=' + encodeURIComponent(b), '_blank', 'noopener');
 }
 function draftCard(v) {
-  var list = (v.D.drafts || []).filter(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; });
+  var stepOf = function (d) { var m = /^\s*Approach\s*([1-6])/i.exec(d.approach || ''); return m ? +m[1] : 9; };
+  var list = (v.D.drafts || []).filter(function (d) { return !(T.S.draftsDone || {})[d.draft_id]; })
+    .sort(function (a, b) { return stepOf(a) - stepOf(b); });
   return el('div', { id: 'claudedrafts' },
     list.slice(0, 2).map(function (d) {
       var ur = /[؀-ۿ]/.test(d.text);
@@ -86,13 +91,15 @@ function draftCard(v) {
         el('div', { class: 'msg' + (ur ? ' ur' : ''), lang: ur ? 'ur' : null }, String(d.text).split('\n').map(function (l) { return el('div', { dir: 'auto', class: l ? '' : 'gap', text: l }); })),
         el('div', { class: 'actions2' },
           el('a', { class: 'btn primary wa', href: waLink(d.text), target: waTarget(), rel: 'noopener', id: 'draftsend', onclick: function () {
-            askSent('Draft from Claude', 'text', false, 'Claude draft' + (d.approach ? ' (' + d.approach + ')' : '') + ' sent on WhatsApp.');
+            var st = /^\s*Approach\s*([1-6])/i.exec(d.approach || ''), n = st ? +st[1] : 0;
+            askSent(n ? 'Follow-up message, approach ' + n : 'Draft from Claude', 'text', false,
+              n ? 'Approach ' + n + ' (' + NUDGES[n - 1].name + ') sent on WhatsApp (Claude draft).' : 'Claude draft' + (d.approach ? ' (' + d.approach + ')' : '') + ' sent on WhatsApp.');
             T.S.pendingSent.draft = d.draft_id; saveState();
           } }, svg('wa'), el('span', { text: 'Send' })),
           btn('', 'x', 'Dismiss', function () { draftDone(d.draft_id, 'dismissed'); }, 'draftdismiss')));
     }),
     btn('wide', 'msg', 'Ask Claude for a draft', askClaude, 'askclaude'),
-    el('p', { class: 'hint', text: 'Opens Claude with a brief of the balance, his replies and the reasons he gave. Claude writes the message into your Sheet, and it appears here after the next sync.' }));
+    el('p', { class: 'hint', text: 'Opens Claude with a brief of the balance, his replies, the reasons he gave and the next step of the ladder. Claude writes the message into your Sheet; it appears at the top of this screen after the next sync, and Send logs it as that step.' }));
 }
 function draftDone(id, status) {
   T.S.draftsDone = T.S.draftsDone || {}; T.S.draftsDone[id] = status;
